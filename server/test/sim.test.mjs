@@ -13,6 +13,9 @@ const CONSTANT_NAMES = [
   'MOOD_MIN',
   'MOOD_MAX',
   'MOOD_BASE',
+  'THIRSTY_MOOD',
+  'HUNGRY_MOOD',
+  'FULL_MOOD',
   'PET_MOOD',
   'PET_MOOD_MS',
   'PLAY_MOOD',
@@ -138,7 +141,11 @@ test('水耗尽后产出变慢', () => {
   const dry = SIM.fresh(0);
   dry.water = 0;
   dry.food = 0;
-  const expected = 1 / SIM.BASE_INTERVAL_MS * 1 * SIM.EMPTY_FACTOR * SIM.EMPTY_FACTOR;
+  const expected =
+    1 / SIM.BASE_INTERVAL_MS *
+    (SIM.MOOD_MIN + (SIM.MOOD_MAX - SIM.MOOD_MIN) * (50 - 20 - 20) / 100) *
+    SIM.EMPTY_FACTOR *
+    SIM.EMPTY_FACTOR;
   assert.ok(Math.abs(SIM.rateAt(dry, 0) - expected) < 1e-18);
 });
 
@@ -181,6 +188,37 @@ test('心情系数始终落在上下限内', () => {
   assert.ok(boosted > 1 && boosted <= SIM.MOOD_MAX);
 });
 
+test('渴饿满都会压低心情', () => {
+  assert.equal(SIM.moodScore(SIM.fresh(0), 0), 50);
+
+  const thirsty = SIM.fresh(0);
+  thirsty.water = 0;
+  assert.equal(SIM.moodScore(thirsty, 0), 30);
+
+  const hungry = SIM.fresh(0);
+  hungry.food = 0;
+  assert.equal(SIM.moodScore(hungry, 0), 30);
+
+  const full = SIM.fresh(0);
+  full.boxes = threeBoxes(0);
+  for (const box of full.boxes) {
+    while (box.poops.length < SIM.BOX_LEVELS[box.level].cap) box.poops.push({ id: full.seq++, kind: 0 });
+  }
+  assert.equal(SIM.moodScore(full, 0), 35);
+  full.boxes[0].poops.pop();
+  assert.equal(SIM.moodScore(full, 0), 50);
+
+  const all = SIM.fresh(0);
+  all.water = 0;
+  all.food = 0;
+  all.boxes = threeBoxes(0);
+  for (const box of all.boxes) {
+    while (box.poops.length < SIM.BOX_LEVELS[box.level].cap) box.poops.push({ id: all.seq++, kind: 0 });
+  }
+  assert.equal(SIM.moodScore(all, 0), 0);
+  assert.equal(SIM.factors(all, 0).mood, SIM.MOOD_MIN);
+});
+
 test('逐段推进与一次推进结果相同', () => {
   const once = SIM.fresh(0);
   SIM.simulate(once, 6 * 3600000);
@@ -213,7 +251,26 @@ test('三盆全满时停止产出', () => {
   assert.equal(totalPoops(s), before);
   assert.equal(s.sim.fill, 0.5);
   assert.ok(SIM.reasons(s, 86400000).some((r) => r.id === 'full'));
+  assert.ok(SIM.reasons(s, 86400000).find((r) => r.id === 'full').text.includes('个盆都满了'));
   assert.equal(SIM.isSquatting(s, 86400000), false);
+
+  const single = SIM.fresh(0);
+  while (single.boxes[0].poops.length < SIM.BOX_LEVELS[0].cap) {
+    single.boxes[0].poops.push({ id: single.seq++, kind: 0 });
+  }
+  const singleText = SIM.reasons(single, 0).find((r) => r.id === 'full').text;
+  assert.ok(singleText.includes('盆满了'));
+  assert.ok(!singleText.includes('个盆都满了'));
+});
+
+test('孤单原因只在互动过之后才报', () => {
+  const s = SIM.fresh(0);
+  assert.ok(!SIM.reasons(s, 0).some((r) => r.id === 'lonely'));
+  assert.ok(!SIM.reasons(s, 600000).some((r) => r.id === 'lonely'));
+
+  SIM.pet(s, 1000);
+  assert.ok(!SIM.reasons(s, 1000).some((r) => r.id === 'lonely'));
+  assert.ok(SIM.reasons(s, 361000).some((r) => r.id === 'lonely'));
 });
 
 test('旧存档无损迁移', () => {
@@ -246,6 +303,9 @@ test('旧存档无损迁移', () => {
   assert.equal(s.food, 1);
   assert.ok(!('poops' in s));
   assert.ok(!('fedUntil' in s));
+  assert.equal(s.owned.bowlPro, true);
+  assert.equal(s.owned.bowl, undefined);
+  assert.equal(s.tutorial.step, undefined);
 
   const crowded = {
     level: 2,

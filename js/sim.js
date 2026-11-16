@@ -8,6 +8,9 @@
   var MOOD_MIN = 0.6;
   var MOOD_MAX = 1.4;
   var MOOD_BASE = 50;
+  var THIRSTY_MOOD = 20;
+  var HUNGRY_MOOD = 20;
+  var FULL_MOOD = 15;
   var PET_MOOD = 30;
   var PET_MOOD_MS = 1200000;
   var PLAY_MOOD = 40;
@@ -108,7 +111,7 @@
       food: 1,
       mood: { petAt: 0, playAt: 0, treatAt: 0, treatBoost: 0 },
       sim: { at: nowMs, fill: 0, lastPoopAt: 0 },
-      tutorial: { done: false, step: 0 },
+      tutorial: { done: false },
       foodKind: 'kibble',
     };
   }
@@ -149,9 +152,13 @@
         food: 1,
         mood: { petAt: 0, playAt: 0, treatAt: 0, treatBoost: 0 },
         sim: { at: nowMs, fill: 0, lastPoopAt: 0 },
-        tutorial: { done: true, step: 0 },
+        tutorial: { done: true },
         foodKind: 'kibble',
       };
+      if (out.owned.bowl === true) {
+        out.owned.bowlPro = true;
+        delete out.owned.bowl;
+      }
       syncLevel(out);
       return out;
     }
@@ -181,10 +188,14 @@
     if (typeof s.sim.at !== 'number') s.sim.at = nowMs;
     if (typeof s.sim.fill !== 'number') s.sim.fill = 0;
     if (typeof s.sim.lastPoopAt !== 'number') s.sim.lastPoopAt = 0;
-    if (!s.tutorial || typeof s.tutorial !== 'object') s.tutorial = { done: true, step: 0 };
+    if (!s.tutorial || typeof s.tutorial !== 'object') s.tutorial = { done: true };
     if (s.tutorial.done === undefined) s.tutorial.done = true;
-    if (s.tutorial.step === undefined) s.tutorial.step = 0;
+    delete s.tutorial.step;
     if (s.foodKind === undefined) s.foodKind = 'kibble';
+    if (s.owned.bowl === true) {
+      s.owned.bowlPro = true;
+      delete s.owned.bowl;
+    }
     syncLevel(s);
     return s;
   }
@@ -207,11 +218,15 @@
 
   function moodScore(state, atMs) {
     var m = state.mood;
+    var play = Math.min(m.playBoost || 0, PLAY_MOOD);
     return clamp(
       MOOD_BASE +
         PET_MOOD * decay(m.petAt, atMs, PET_MOOD_MS) +
-        (m.playBoost || 0) * decay(m.playAt, atMs, m.playMs || PLAY_MOOD_MS) +
-        (m.treatBoost || 0) * decay(m.treatAt, atMs, TREAT_MOOD_MS),
+        play * decay(m.playAt, atMs, m.playMs || PLAY_MOOD_MS) +
+        (m.treatBoost || 0) * decay(m.treatAt, atMs, TREAT_MOOD_MS) -
+        (state.water <= 0 ? THIRSTY_MOOD : 0) -
+        (state.food <= 0 ? HUNGRY_MOOD : 0) -
+        (hasSpace(state) ? 0 : FULL_MOOD),
       0,
       100
     );
@@ -262,13 +277,17 @@
     if (!hasSpace(state)) {
       out.push({
         id: 'full',
-        text: state.boxes.length === 1 ? '盆满了，猫憋着很难受' : '三个盆都满了，猫憋着很难受',
+        text:
+          state.boxes.length === 1
+            ? '盆满了，猫憋着很难受'
+            : state.boxes.length + ' 个盆都满了，猫憋着很难受',
       });
     }
     var petAt = state.mood.petAt;
     var playAt = state.mood.playAt;
+    var everTouched = !!(petAt || playAt);
     var touched = (petAt && atMs - petAt < LONELY_MS) || (playAt && atMs - playAt < LONELY_MS);
-    if (!touched) out.push({ id: 'lonely', text: '好久没人陪它玩了' });
+    if (everTouched && !touched) out.push({ id: 'lonely', text: '好久没人陪它玩了' });
     return out;
   }
 
@@ -416,6 +435,9 @@
     MOOD_MIN: MOOD_MIN,
     MOOD_MAX: MOOD_MAX,
     MOOD_BASE: MOOD_BASE,
+    THIRSTY_MOOD: THIRSTY_MOOD,
+    HUNGRY_MOOD: HUNGRY_MOOD,
+    FULL_MOOD: FULL_MOOD,
     PET_MOOD: PET_MOOD,
     PET_MOOD_MS: PET_MOOD_MS,
     PLAY_MOOD: PLAY_MOOD,
