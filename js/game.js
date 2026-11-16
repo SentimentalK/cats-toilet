@@ -18,33 +18,33 @@
 
   const LEVELS = SIM.BOX_LEVELS;
   const SLEEP_AFTER_MS = 25000;
-  const FOCUS_X = 51;
+  const FOCUS_X = 44;
   const SAVE_EVERY_MS = 10000;
 
   const BOX_ART = [
-    { src: 'assets/box-0.png', name: '塑料小盆', aspect: 1.75, w: 11.5,
+    { src: 'assets/box-0.png', name: '塑料小盆', aspect: 1.75, w: 11,
       rim: 'polygon(0 44%, 16% 48%, 45% 56%, 70% 61%, 80% 52%, 90% 38%, 100% 22%, 100% 100%, 0 100%)',
       cat: { dx: -0.11, lift: 0.47, w: 0.78 }, litter: { x0: 64, x1: 76, y0: 50, y1: 53 } },
-    { src: 'assets/box-1.png', name: '圆边猫砂盆', aspect: 1.70, w: 11.5,
+    { src: 'assets/box-1.png', name: '圆边猫砂盆', aspect: 1.70, w: 11,
       rim: 'polygon(0 45%, 20% 52%, 45% 58%, 72% 62%, 85% 50%, 100% 28%, 100% 100%, 0 100%)',
       cat: { dx: -0.10, lift: 0.45, w: 0.78 }, litter: { x0: 66, x1: 78, y0: 52, y1: 56 } },
-    { src: 'assets/box-2.png', name: '半封闭猫砂盆', aspect: 1.28, w: 11.5,
+    { src: 'assets/box-2.png', name: '半封闭猫砂盆', aspect: 1.28, w: 11,
       rim: 'polygon(0 52%, 12% 57%, 35% 63%, 62% 67%, 70% 63%, 74% 50%, 80% 40%, 90% 30%, 93% 8%, 100% 8%, 100% 100%, 0 100%)',
       cat: { dx: -0.17, lift: 0.40, w: 0.72 }, litter: { x0: 55, x1: 67, y0: 60, y1: 64 } },
-    { src: 'assets/box-3.png', name: '豪华猫厕小屋', aspect: 1.07, w: 11.5,
+    { src: 'assets/box-3.png', name: '豪华猫厕小屋', aspect: 1.07, w: 11,
       rim: 'polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, 16% 68%, 16% 42%, 19% 34%, 27% 30%, 44% 30%, 51% 33%, 55% 41%, 55% 69%, 16% 68%)',
       cat: { dx: 0, lift: 0.18, w: 0.62 }, litter: { x0: 25, x1: 47, y0: 67, y1: 70 } },
   ];
   const POS = {
-    box: { x: 45.5, y: 87 },
-    boxes: [{ x: 33, y: 87, w: 11.5 }, { x: 45.5, y: 87, w: 11.5 }, { x: 58, y: 87, w: 11.5 }],
-    cat: { x: 69.75, y: 93, w: 11 },
-    bag: { x: 21.5, y: 95, w: 6.5 },
-    scoop: { x: 40.5, y: 98, w: 6.5 },
-    water: { x: 80.5, y: 96.5, w: 6.5 },
-    food: { x: 87.5, y: 96.5, w: 6.5 },
-    wand: { x: 11, y: 97.5 },
-    mouse: { x: 15.5, y: 97.5 },
+    box: { x: 33, y: 87 },
+    boxes: [{ x: 33, y: 87, w: 11 }, { x: 21.5, y: 87, w: 11 }, { x: 44.5, y: 87, w: 11 }],
+    cat: { x: 55.5, y: 93, w: 10.5 },
+    bag: { x: 13, y: 96, w: 6.5 },
+    scoop: { x: 28, y: 99, w: 6.5 },
+    water: { x: 40, y: 99, w: 6.5 },
+    food: { x: 47, y: 99, w: 6.5 },
+    wand: { x: 7, y: 97.5 },
+    mouse: { x: 19, y: 97.5 },
   };
 
   const DEFAULT_CAT = 'domestic-orange';
@@ -64,11 +64,11 @@
 
   const ITEMS = [
     { id: 'bowl', group: 'gear', name: '陶瓷饭盆', price: SIM.PRICES.bowlPro, desc: '饭盆容量更大、吃得更久',
-      src: 'assets/bowl-empty.png', full: 'assets/bowl-full.png', pro: 'food', pos: { x: 87.5, y: 96.5, w: 6.5 } },
+      src: 'assets/bowl-empty.png', full: 'assets/bowl-full.png', pro: 'food', pos: { x: 47, y: 99, w: 6.5 } },
     { id: 'waterPro', group: 'gear', name: '高级水盆', price: SIM.PRICES.waterPro, desc: '一盆水顶 12 小时，不用总加',
-      src: 'assets/bowl-empty.png', pro: 'water', pos: { x: 80.5, y: 96.5, w: 6.5 } },
+      src: 'assets/bowl-empty.png', pro: 'water', pos: { x: 40, y: 99, w: 6.5 } },
     { id: 'freshener', group: 'gear', name: '除臭小机器', price: SIM.PRICES.freshener, desc: `臭气消失，每坨多 ${SIM.FRESHENER_BONUS} 积分`,
-      src: 'assets/freshener.png', pos: { x: 21, y: 84.5, w: 5.5 } },
+      src: 'assets/freshener.png', pos: { x: 21, y: 78, w: 5.5 } },
     { id: 'rug', group: 'furniture', name: '爪印地毯', price: SIM.PRICES.rug, desc: '软软的，踩着舒服',
       src: 'assets/rug.png', flat: true, pos: { x: 56, y: 99, w: 26, z: 3 } },
     { id: 'bed', group: 'furniture', name: '奶油猫窝', price: SIM.PRICES.bed, desc: '困了会自己去窝里睡',
