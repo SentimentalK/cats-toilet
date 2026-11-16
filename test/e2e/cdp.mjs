@@ -289,8 +289,17 @@ export async function launch({ port = 9555, userDataDir, width = 390, height = 8
       return page.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     },
 
+    async viewport(w, h) {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    },
+
     async shot(file) {
       const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+      await writeFile(file, Buffer.from(data, 'base64'));
+    },
+
+    async shotViewport(file) {
+      const { data } = await send('Page.captureScreenshot', { format: 'png' });
       await writeFile(file, Buffer.from(data, 'base64'));
     },
 
