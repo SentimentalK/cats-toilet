@@ -128,7 +128,25 @@ img { -webkit-user-drag: none; }
 /* only the position glides; the width must snap, or a pose swapped in at the
    end of a run is shown at the run frame's size for a moment */
 #cat { transition: left var(--walk, .7s) linear, bottom var(--walk, .7s) linear; }
-#poops { position: absolute; transform: translateX(-50%); pointer-events: none; }
+#boxes { position: absolute; inset: 0; pointer-events: none; }
+.box-slot { transform: none; pointer-events: auto; cursor: pointer; }
+.box-slot > .box-img { position: relative; display: block; width: 100%; height: auto; }
+.box-slot .poops { position: absolute; inset: 0; pointer-events: none; }
+.box-slot .rim { transform: none; left: 0; bottom: 0; width: 100%; }
+.box-badge {
+  position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--cream); color: #6a3f1f;
+  font: 700 11px/1.35 "Fredoka", var(--font); white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(120, 84, 44, .25);
+  pointer-events: none;
+}
+.box-slot.full .box-badge { background: var(--peach); color: #8a4324; }
+#water-bowl > img { filter: hue-rotate(-24deg) saturate(2.1) brightness(1.06); }
+#water-bowl.pro > img { filter: hue-rotate(-30deg) saturate(2.5) brightness(1.12); }
+#food-bowl > img { filter: sepia(.42) saturate(1.15) brightness(1.04); }
+#food-bowl.pro > img { filter: sepia(.5) saturate(1.2) brightness(1.08); }
+.sprite.toy { font-size: clamp(16px, 5cqh, 34px); line-height: 1; text-align: center; }
 #bubble { z-index: 2000; }
 #fx { position: absolute; inset: 0; z-index: 3000; pointer-events: none; }
 
@@ -337,41 +355,50 @@ img { -webkit-user-drag: none; }
   box-shadow: 0 2px 0 rgba(120, 84, 44, .14);
 }
 
-#status { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; cursor: pointer; }
-#status:active { transform: translateY(1px); }
-#status-thumb { width: 58px; height: 58px; object-fit: contain; flex: none; background: var(--cream-2); border-radius: 14px; padding: 4px; }
-.status-main { flex: 1; min-width: 0; }
-.status-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-family: "KuaiLe", var(--font); white-space: nowrap; }
-#lv-badge {
-  font-family: "Fredoka", var(--font); font-weight: 700; font-size: 13px;
-  padding: 2px 9px; border-radius: 999px;
-  background: var(--sage); color: #35501c;
+#care { display: flex; flex-direction: column; gap: 7px; padding: 9px 13px; }
+.care-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.care-row > b { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#care-mood #mood-face { font-size: 21px; line-height: 1; }
+#care-mood #mood-text { font: 400 16px "KuaiLe", var(--font); }
+.care-bar {
+  flex: 1; min-width: 40px; height: 11px; border-radius: 999px;
+  background: var(--cream-2); box-shadow: inset 0 0 0 1.5px var(--line-soft);
+  overflow: hidden; display: block;
 }
-.status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; }
-#pips { display: flex; flex-wrap: wrap; gap: 3px; }
-#pips img { height: 22px; }
-#up-chip, #buff {
-  font: 600 12px/1 "Fredoka", var(--font);
-  padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+.care-bar > b { display: block; height: 100%; border-radius: inherit; transition: width .25s; }
+#care-water .care-bar > b { background: linear-gradient(90deg, #8fcbe4, #5fa9cc); }
+#care-food .care-bar > b { background: linear-gradient(90deg, #f6c2a8, #e59b79); }
+#reasons { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+#reasons:empty { display: none; }
+.reason {
+  font-size: 12px; line-height: 1.5;
+  padding: 1px 9px; border-radius: 999px;
+  background: #fbe3d5; color: #8a4324;
 }
-#up-chip { background: var(--peach); color: #8a4324; animation: nudge 1.4s ease-in-out infinite; }
-#buff { background: #ffe9a8; color: #8a5a10; font-variant-numeric: tabular-nums; }
-@keyframes nudge { 50% { transform: translateY(-2px); } }
-#pips img { width: auto; filter: grayscale(1) opacity(.22); transition: filter .25s, transform .25s; }
-#pips img.full { filter: none; transform: scale(1.08); }
-.status-timer { text-align: right; flex: none; }
-.status-timer small, #stats small { display: block; font-size: 12px; color: var(--ink-soft); }
-.status-timer b { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-#status.active .status-timer b { color: var(--sage-deep); }
 
-#stats { display: none; padding: 10px 6px; text-align: center; }
-#stats > div { flex: 1; }
-#stats > div + div { border-left: 2px dashed var(--line-soft); }
-#stats b { font-size: 17px; font-weight: 600; }
+#box-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+#box-strip::-webkit-scrollbar { display: none; }
+.box-card {
+  flex: 1 1 96px; min-width: 96px; max-width: 132px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 6px 8px 7px;
+  background: #fffaf0; border: 2px solid var(--line-soft); border-radius: 14px;
+}
+.box-card.filled { border-color: var(--peach-deep); }
+.box-head { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.box-lv { font: 700 12px "Fredoka", var(--font); color: #35501c; }
+.box-name { font: 400 13px "KuaiLe", var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.box-pips { display: flex; flex-wrap: wrap; gap: 2px; min-height: 8px; }
+.pip { width: 8px; height: 8px; border-radius: 50%; background: #e6dcc6; }
+.pip.full { background: #a8794b; }
+.box-value { font-size: 11px; color: var(--ink-soft); }
+.box-card .buy { min-width: 0; width: 100%; height: 26px; padding: 0 6px; margin-top: 1px; font-size: 12px; gap: 3px; }
+.box-card.add { justify-content: center; align-items: center; border-style: dashed; background: transparent; }
+.box-card.add .box-name { color: var(--ink-soft); }
 
 #tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 6px;
   background: var(--cream);
@@ -481,6 +508,40 @@ img { -webkit-user-drag: none; }
 .big-btn[disabled] { background: #e6dcc6; color: var(--ink-soft); box-shadow: none; cursor: not-allowed; }
 .big-btn.plain { background: var(--cream-2); box-shadow: inset 0 -3px 0 rgba(120, 84, 44, .14); margin-top: 8px; height: 46px; font-size: 16px; }
 .sheet-note { margin: 10px 2px 0; font-size: 13px; color: var(--ink-soft); text-align: center; }
+.shop-card .buy { min-width: 0; padding: 0 10px; white-space: nowrap; }
+.shop-card.locked { opacity: .8; }
+.food-emoji, .toy-emoji { font-size: 40px; line-height: 1; }
+
+/* ---------- onboarding ---------- */
+#onboarding {
+  position: absolute; inset: 0; z-index: 30;
+  background: rgba(70, 46, 24, .40);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  animation: fade .2s;
+}
+.onb-card {
+  width: min(100%, 360px);
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 20px 18px 16px;
+  background: var(--cream);
+  border: 2px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  animation: sheet-in .28s cubic-bezier(.2, .9, .3, 1.1);
+}
+.onb-card > b { font: 400 20px "KuaiLe", var(--font); letter-spacing: .04em; }
+.onb-card p { margin: 0; font-size: 14px; line-height: 1.65; color: var(--ink-soft); }
+.onb-actions { display: flex; gap: 8px; margin-top: 2px; }
+.onb-actions button {
+  flex: 1; height: 46px; border-radius: 16px;
+  background: var(--cream-2);
+  box-shadow: inset 0 -3px 0 rgba(120, 84, 44, .14);
+  font: 400 17px "KuaiLe", var(--font);
+}
+#onboarding-next { background: var(--peach); box-shadow: inset 0 -3px 0 rgba(170, 90, 50, .22); }
+.onb-actions button:active { transform: translateY(2px); }
 
 /* ---------- wide screens: scene left, panel right ---------- */
 @media (min-aspect-ratio: 1/1) and (min-width: 720px) {
@@ -493,8 +554,6 @@ img { -webkit-user-drag: none; }
     border-top: 0;
     border-left: 3px solid var(--line);
   }
-  #stats { display: flex; }
-  #tabs { grid-template-columns: repeat(2, 1fr); }
   .tab { height: 84px; font-size: 17px; }
   .tab img, .tab svg { height: 42px; width: 56px; }
   #sheet-wrap { align-items: center; }

@@ -11,7 +11,7 @@
  */
 'use strict';
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE_PREFIX = 'cats-toilet-';
 const CACHE = CACHE_PREFIX + VERSION;
 const NETWORK_TIMEOUT_MS = 3000;
@@ -23,6 +23,7 @@ const SHELL = [
   'css/style.css',
   'css/social.css',
   'js/cats.js',
+  'js/sim.js',
   'js/game.js',
   'js/api.js',
   'js/account.js',

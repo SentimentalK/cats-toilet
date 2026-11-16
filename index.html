@@ -64,10 +64,8 @@
 
       <div class="sprite" id="bag"><img src="assets/bag.png" alt="垃圾袋" draggable="false"></div>
 
-      <div class="sprite" id="box"><img alt="猫砂盆" draggable="false"></div>
-      <div id="poops"></div>
+      <div id="boxes" aria-label="猫砂盆"></div>
       <div class="sprite" id="cat"><img alt="猫咪" draggable="false"></div>
-      <div class="sprite" id="rim" aria-hidden="true"><img alt="" draggable="false"></div>
 
       <div id="stink" aria-hidden="true">
         <svg viewBox="0 0 120 100">
@@ -78,6 +76,9 @@
       </div>
 
       <div class="sprite" id="scoop"><img src="assets/scoop.png" alt="猫砂铲" draggable="false"></div>
+
+      <div class="sprite tappable" id="water-bowl" role="button" aria-label="水盆，点一下加满水"><img src="assets/bowl-empty.png" alt="" draggable="false"></div>
+      <div class="sprite tappable" id="food-bowl" role="button" aria-label="饭盆，点一下喂食"><img src="assets/bowl-empty.png" alt="" draggable="false"></div>
 
       <div id="bubble" hidden></div>
       <div id="fx"></div>
@@ -95,6 +96,7 @@
           <span class="coin"><svg><use href="#i-paw"/></svg></span>
           <b id="points-num">0</b>
         </div>
+        <button id="btn-help" class="round-btn" aria-label="玩法说明">?</button>
         <button id="btn-settings" class="round-btn" aria-label="设置"><svg><use href="#i-gear"/></svg></button>
       </div>
     </header>
@@ -103,31 +105,32 @@
   </main>
 
   <section id="panel">
-    <div id="status" class="card" role="button" tabindex="0" aria-label="猫砂盆，点开升级">
-      <img id="status-thumb" alt="" draggable="false">
-      <div class="status-main">
-        <div class="status-title"><span id="lv-badge">Lv.0</span><span id="box-name">塑料小盆</span></div>
-        <div class="status-row"><div id="pips" aria-label="猫砂盆里的便便"></div><span id="up-chip" hidden>可升级 ↑</span><span id="buff" hidden></span></div>
-      </div>
-      <div class="status-timer">
-        <small id="timer-label">本次蹲坑</small>
-        <b id="timer">00:00</b>
-      </div>
+    <div id="care" class="card" aria-label="猫的状态">
+      <div class="care-row" id="care-mood"><span id="mood-face">😐</span><b id="mood-text">心情 50</b></div>
+      <div class="care-row" id="care-water"><b id="water-text">水 100%</b><i class="care-bar"><b id="water-bar" style="width:100%"></b></i></div>
+      <div class="care-row" id="care-food"><b id="food-text">饭盆 1.0 份</b><i class="care-bar"><b id="food-bar" style="width:33%"></b></i></div>
+      <ul id="reasons"></ul>
     </div>
 
-    <div id="stats" class="card">
-      <div><small>累计蹲坑</small><b id="stat-time">0 分钟</b></div>
-      <div><small>累计铲屎</small><b id="stat-scooped">0 坨</b></div>
-      <div><small>每坨积分</small><b id="stat-value">10</b></div>
-    </div>
+    <div id="box-strip"></div>
 
     <nav id="tabs">
-      <button id="tab-squat" class="tab"><img alt="" draggable="false"><span>蹲坑</span></button>
       <button id="tab-scoop" class="tab"><img src="assets/scoop.png" alt="" draggable="false"><span>铲屎</span><i id="scoop-badge" hidden>0</i></button>
       <button id="tab-shop" class="tab"><svg><use href="#i-shop"/></svg><span>商店</span><i id="shop-dot" class="dot" hidden></i></button>
       <button id="tab-plaza" class="tab"><svg><use href="#i-plaza"/></svg><span>广场</span></button>
     </nav>
   </section>
+
+  <div id="onboarding" hidden>
+    <div class="onb-card">
+      <b id="onboarding-step">…</b>
+      <p id="onboarding-text"></p>
+      <div class="onb-actions">
+        <button id="onboarding-skip">跳过</button>
+        <button id="onboarding-next">下一步</button>
+      </div>
+    </div>
+  </div>
 
   <div id="sheet-wrap" hidden>
     <div id="sheet" class="card" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
@@ -141,6 +144,7 @@
 <div id="social"></div>
 
 <script src="js/cats.js"></script>
+<script src="js/sim.js"></script>
 <script src="js/game.js"></script>
 <script src="js/api.js"></script>
 <script src="js/account.js"></script>
