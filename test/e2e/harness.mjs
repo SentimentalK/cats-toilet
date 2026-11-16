@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './cdp.mjs';
 import { startServer } from './serve.mjs';
+import { GAME_READY } from './seed.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const RUNTIME_DIR = '/home/sentimentalk/codes/temp/cat-002/e2e';
@@ -51,9 +52,9 @@ export async function withGame(t, fn, opts = {}) {
   }
 
   page = await launch({ port: cdpPort, userDataDir });
-  if (opts.init) await page.addInitScript(opts.init);
-  await page.goto(base + (opts.path ?? '/?reset=1'));
-  await page.waitFor('!!window.__game');
+  if (opts.init) await page.addInitScript(typeof opts.init === 'function' ? await opts.init({ base }) : opts.init);
+  await page.goto(base + (opts.path ?? '/'));
+  await page.waitFor(GAME_READY);
 
   return fn({ page, base, shotDir });
 }

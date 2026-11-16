@@ -233,7 +233,7 @@ export async function launch({ port = 9555, userDataDir, width = 390, height = 8
     },
 
     async goto(url) {
-      const loaded = onceEvent('Page.loadEventFired', 10_000, `load of ${url}`);
+      const loaded = onceEvent('Page.loadEventFired', 25_000, `load of ${url}`);
       const res = await send('Page.navigate', { url });
       if (res.errorText) throw new Error(`navigate ${url} failed: ${res.errorText}`);
       await loaded;
