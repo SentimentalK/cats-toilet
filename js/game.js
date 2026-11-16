@@ -1140,7 +1140,7 @@
   for (const id of SIM.TOY_IDS) if (state.owned[id]) addToy(id, false);
   applyWall();
   el.cat.style.transition = 'none';
-  setPose('sit', 'idle');
+  setPose('sleep', 'idle');
   el.cat.style.zIndex = spotOf('idle').z;
   requestAnimationFrame(() => requestAnimationFrame(() => { el.cat.style.transition = ''; }));
   renderBoxes(); renderPanel(); renderTick(now());
