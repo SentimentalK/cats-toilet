@@ -7,6 +7,15 @@
   const SIM = window.CatSim;
   if (!SIM) throw new Error('CatSim missing');
 
+  // ---------- developer cheats (URL only, never shown in the UI) ----------
+  //   index.html?coins=3000           add points (negative takes them away)
+  //   index.html?level=5              set every litter box to that level (0-10)
+  //   index.html?items=all            own every shop item, toy and wall colour
+  //   index.html?reset=1              wipe the save first
+  //   index.html?clock=<epochMs>      move the clock to that instant (tests/debug)
+  // They combine (?reset=1&coins=500&level=3), are applied once, then removed
+  // from the address bar so a reload does not apply them again.
+  //   window.__game.advanceClock(ms)  push the clock forward ms and recompute once
   const clock = { offset: 0 };
   const now = () => Date.now() + clock.offset;
 
@@ -84,6 +93,8 @@
       src: 'assets/picture.png', flat: true, pos: { x: 79.5, y: 62, w: 8.5, z: 2 } },
   ];
   const ITEM = Object.fromEntries(ITEMS.map((it) => [it.id, it]));
+  const OWNED_ALIAS = { bowl: 'bowlPro' };
+  const ownedOf = (id) => !!state.owned[OWNED_ALIAS[id] || id] || !!state.owned[id];
   const WALLS = [
     { id: 'sky', name: '天空蓝', color: null, swatch: '#b9d3df', price: 0 },
     { id: 'pink', name: '樱花粉', color: '#e9c2ca', swatch: '#ecccd2', price: SIM.PRICES.wall },
@@ -159,10 +170,9 @@
       SIM.syncLevel(state);
     }
     if (params.get('items') === 'all') {
-      for (const it of ITEMS) state.owned[it.id] = true;
+      for (const it of ITEMS) state.owned[OWNED_ALIAS[it.id] || it.id] = true;
       for (const id of SIM.TOY_IDS) state.owned[id] = true;
       for (const w of WALLS) state.walls[w.id] = true;
-      state.owned.bowlPro = true;
     }
     save();
     keys.forEach((k) => params.delete(k));
@@ -792,7 +802,7 @@
   }
   function toyCard(id) {
     const toy = SIM.TOYS[id];
-    const owned = !!state.owned[id];
+    const owned = ownedOf(id);
     return `<div class="shop-card${owned ? ' owned' : ''}">
       <div class="shop-pic"><span class="toy-emoji">${TOY_EMOJI[id]}</span></div>
       <b>${toy.name}</b>
@@ -815,7 +825,7 @@
     if (show('toy')) for (const id of SIM.TOY_IDS) cards += toyCard(id);
     for (const it of ITEMS) {
       if (!show(it.group)) continue;
-      const owned = !!state.owned[it.id];
+      const owned = ownedOf(it.id);
       cards += `<div class="shop-card${owned ? ' owned' : ''}">
         <div class="shop-pic"><img src="${it.full || it.src}" alt=""></div>
         <b>${it.name}</b><small>${it.desc}</small>
@@ -859,10 +869,9 @@
   function buy(id) {
     const it = ITEM[id], toy = SIM.TOYS[id];
     if (!it && !toy) return;
-    if (state.owned[id] || state.points < priceOf(id)) return;
+    if (ownedOf(id) || state.points < priceOf(id)) return;
     state.points -= priceOf(id);
-    state.owned[id] = true;
-    if (id === 'bowl') state.owned.bowlPro = true;   // sim reads owned.bowlPro for the food bowl upgrade
+    state.owned[OWNED_ALIAS[id] || id] = true;
     save();
     if (it) addItem(id, true); else addToy(id, true);
     if (it) closeSheet(); else refreshSheet();
@@ -1005,7 +1014,6 @@
     el.onboarding.hidden = true;
     if (onbHelp) return;
     state.tutorial.done = true;
-    state.tutorial.step = 0;
     save();
   }
 
@@ -1136,8 +1144,8 @@
   place(el.foodBowl, { ...POS.food, z: zOf(POS.food.y) });
   el.bag.classList.add('shadowed');
   layoutBoxSlots();
-  for (const it of ITEMS) if (state.owned[it.id]) addItem(it.id, false);
-  for (const id of SIM.TOY_IDS) if (state.owned[id]) addToy(id, false);
+  for (const it of ITEMS) if (ownedOf(it.id)) addItem(it.id, false);
+  for (const id of SIM.TOY_IDS) if (ownedOf(id)) addToy(id, false);
   applyWall();
   el.cat.style.transition = 'none';
   setPose('sleep', 'idle');
