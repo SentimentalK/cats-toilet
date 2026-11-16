@@ -17,6 +17,9 @@
 | MOOD_MIN | 0.6 | 心情最差时速率降到基准的 60% |
 | MOOD_MAX | 1.4 | 心情最好时速率升到基准的 140% |
 | MOOD_BASE | 50 | 无互动时心情基础分 50，系数正好 1.0 |
+| THIRSTY_MOOD | 20 | 水盆空了扣 20 分 |
+| HUNGRY_MOOD | 20 | 饭盆空了扣 20 分 |
+| FULL_MOOD | 15 | 所有盆都满了扣 15 分 |
 | PET_MOOD | 30 | 摸头一次加 30 分，约 20 分钟回落到基础值 |
 | PET_MOOD_MS | 1200000 | 摸头加成 20 分钟线性衰减到 0 |
 | PLAY_MOOD | 40 | 玩耍加成按 40 分留顶，逗猫棒 20 分、小老鼠 35 分 |
@@ -37,8 +40,8 @@
 
 两个需要单独解释的取值：
 
-- **EMPTY_FACTOR 取 0.4 而不是 0**：水粮见底是惩罚，不该让进度彻底停摆。0.4 让速率降到四成；水粮同时见底时是 0.4 × 0.4 = 0.16，每小时仍有 0.384 团，玩家回来补一次水粮就能恢复，不会觉得存档坏了。若取 0，离线一夜就完全零产出，惩罚过重且没有补救的层次感。
-- **心情上下限 0.6 / 1.4**：心情最多让速率上下浮动 40%。照料有回报，但不至于把"何时回来"变成唯一变量；0.6 的下限保证再懒的玩家也有基础产出，1.4 的上限避免叠加加成后雪崩式加速。
+- **EMPTY_FACTOR 取 0.4 而不是 0**：水粮见底是惩罚，不该让进度彻底停摆。水粮见底且盆满 → 心情 0 → 系数 0.6 × 0.4 × 0.4 = 0.096，约 260 分钟一团；只水粮见底不盆满 → 心情 10 → 系数 0.4 × 0.4 × 0.68 = 0.1088，约 230 分钟一团。两者都是变慢不停产，玩家回来补一次水粮就能恢复。若取 0，离线一夜就完全零产出，惩罚过重且没有补救的层次感。
+- **心情上下限 0.6 / 1.4**：心情让速率在基准的 60%–140% 之间浮动。渴 + 饿 + 盆满三项惩罚同时成立时得分 0，系数正好落到 0.6；刚摸头 + 刚玩 + 吃了加心情的食物时得分封顶 100，系数正好 1.4。照料有回报，但不至于把"何时回来"变成唯一变量。
 - **网格 1 秒**：1 小时 3600 步，30 天离线才 259 万步，必要时还能在"无空盆且水和粮都见底"的静止区间整段跳过。固定网格让"一次补算 6 小时"和"每 60 秒补算一次各 360 次"得到逐字节相同的结果。
 
 ## 心情的合成
@@ -47,15 +50,18 @@
 moodScore = clamp(0, 100,
     MOOD_BASE
   + PET_MOOD  * decay(petAt,  PET_MOOD_MS)
-  + playBoost * decay(playAt, playMs || PLAY_MOOD_MS)
-  + treatBoost * decay(treatAt, TREAT_MOOD_MS))
+  + min(playBoost, PLAY_MOOD) * decay(playAt, playMs || PLAY_MOOD_MS)
+  + treatBoost * decay(treatAt, TREAT_MOOD_MS)
+  - (water <= 0 ? THIRSTY_MOOD : 0)
+  - (food  <= 0 ? HUNGRY_MOOD  : 0)
+  - (hasSpace(state) ? 0 : FULL_MOOD))
 
 decay(t0, T) = t0 === 0 ? 0 : t0 >= now ? 1 : max(0, 1 - (now - t0) / T)
 
 factors.mood = MOOD_MIN + (MOOD_MAX - MOOD_MIN) * moodScore / 100
 ```
 
-摸头免费，写 `mood.petAt`。玩耍要求先拥有玩具，写 `mood.playAt / playBoost / playMs`。带心情加成的食物写 `mood.treatAt / treatBoost`，只有 `mood > 0` 的食物才写（初级猫粮不加心情）。无任何互动时得分 50，系数正好 1.0。
+摸头免费，写 `mood.petAt`。玩耍要求先拥有玩具，写 `mood.playAt / playBoost / playMs`，单次玩耍加分封顶 `PLAY_MOOD = 40`。带心情加成的食物写 `mood.treatAt / treatBoost`，只有 `mood > 0` 的食物才写（初级猫粮不加心情）。水盆空扣 20 分、饭盆空扣 20 分、所有盆都满扣 15 分，三项同时成立时 50 分被扣到 0，心情系数落到 `MOOD_MIN = 0.6`；水粮充足且有空盆、又没有互动时得分 50，系数正好 1.0。
 
 ## 水与粮的消耗
 
@@ -93,7 +99,7 @@ factors.food  = food  <= 0 ? EMPTY_FACTOR : food  >= FOOD_LOW  ? 1
 
 新玩家：积分 0、水满（1）、饭盆满（1 份，即一份初级猫粮）、心情中性（50）、一个 0 级盆、没有猫。
 
-这个开局够自给：一份猫粮 3 小时吃完，罐底见空之前能自然产出 3 小时 / 25 分钟 ≈ 7 团，每团 10 分，合计约 70 分，足够买 7 份初级猫粮（每份 10 分）。也就是说新玩家只要每 3 小时回来一次，就能靠铲屎覆盖自己的猫粮开销，不会陷入"没粮 → 不产出 → 没分买粮"的死锁。水是免费的，补一次就满。
+这个开局够自给：一份猫粮 3 小时吃完，0 级单盆容量 3，3 小时内最多 3 坨（容量封顶）= 30 分，够买 3 份初级猫粮（每份 10 分）。单盆时靠容量而不是产量说话，新玩家在粮见底前回来铲一次，就能覆盖猫粮开销，不会陷入"没粮 → 不产出 → 没分买粮"的死锁。水是免费的，补一次就满。
 
 ## 一次购买得到什么
 
@@ -129,12 +135,12 @@ v2 状态：
   water, food,
   mood: { petAt, playAt, treatAt, treatBoost, playBoost?, playMs? },
   sim: { at, fill, lastPoopAt },
-  tutorial: { done, step }, foodKind }
+  tutorial: { done }, foodKind }
 ```
 
 顶层 `level` 是各盆等级的最大值，由 `syncLevel` 维护；`buyBox`、`upgradeBox`、`migrate` 末尾都会重算。服务端 `GET /api/plaza` 和 `GET /api/rooms/:id` 直接读 `save.data.level`，广场卡片上的等级靠这个派生值，不写回顶层所有人都会显示 0 级。`owned`、`walls`、`wall` 同样在顶层。
 
-旧存档迁移（`migrate`）：保留 `points / totalScooped / seq / cat / owned / walls / wall`；`level` 取 `clamp(raw.level, 0, 10)` 并作为唯一一个盆的等级；`raw.poops` 里合法的 `{ id, kind }` 截到该等级容量后放进这个盆；`water / food` 置 1，心情全 0，`sim` 从 `nowMs` 起算，`tutorial.done = true`（老玩家不弹入门说明），`foodKind = 'kibble'`。`raw.fedUntil`、`raw.totalSquatMs`、`raw.level`、`raw.poops` 这几个旧字段被丢弃，不再出现在结果里。若 `raw.v === 2`，只补齐缺失字段并重算顶层 `level` 后原样返回。
+旧存档迁移（`migrate`）：保留 `points / totalScooped / seq / cat / owned / walls / wall`；原 `raw.level` 先 clamp 到 0–10，作为唯一一个盆的等级，顶层 `level` 由各盆等级最大值派生，所以 v1 迁移后顶层 `level` 等于原 level；`raw.poops` 里合法的 `{ id, kind }` 截到该等级容量后放进这个盆；`water / food` 置 1，心情全 0，`sim` 从 `nowMs` 起算，`tutorial.done = true`（老玩家不弹入门说明，`tutorial` 只保留 `done`），`foodKind = 'kibble'`。v1 的 `owned.bowl`（陶瓷饭盆）映射为 `owned.bowlPro`，老玩家的饭盆升级在新模拟层继续生效。`raw.fedUntil`、`raw.totalSquatMs`、`raw.poops` 这几个旧字段被丢弃，不再出现在结果里；`raw.level` 只用于派生盆等级与顶层 `level`，不再作为独立字段保留。若 `raw.v === 2`，补齐缺失字段、同样做 `bowl → bowlPro` 映射与 `tutorial.step` 清理，并重算顶层 `level` 后原样返回。
 
 ## 价格表与攒钱时长
 
