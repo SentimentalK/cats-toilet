@@ -1,0 +1,7 @@
+assets/raw/
+server/data/
+node_modules/
+test-results/
+*.db
+*.db-shm
+*.db-wal
