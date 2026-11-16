@@ -16,8 +16,12 @@ Node 24 的测试运行器不再把目录参数展开，所以用 glob 而不是
 
 - `cdp.mjs` — `launch({ port, userDataDir, width, height })`，返回 page：`addInitScript` / `goto` / `evaluate` / `waitFor` / `click` / `text` / `count` / `shot` / `close`，以及 `page.errors`（`{ type, text, url, status }`）。
 - `serve.mjs` — `startServer({ port, dbPath, root })`，起 `server/server.mjs`，返回 `{ url, stop() }`。
-- `harness.mjs` — `withGame(t, fn, opts)`：临时 DB + Chrome profile，起服务、开 Chrome、打开 `opts.path`（默认 `/?reset=1`）、等 `window.__game`，`t.after` 里清理并打印 console 错误条数。
+- `harness.mjs` — `withGame(t, fn, opts)`：临时 DB + Chrome profile，起服务、开 Chrome、打开 `opts.path`（默认 `/`）、等 `window.__game`，`t.after` 里清理并打印 console 错误条数。
 - `smoke.test.mjs` — 冒烟用例。
+
+## 房间时钟
+
+`?clock=<epochMs>` 是房间自带的调试时钟参数（`js/game.js` 读 `clock` query，把 `Date.now()` 偏到指定时刻）；用例用页面里的 `window.__game.advanceClock(ms)` 往后推进，不要改系统时间。
 
 ## 环境变量
 

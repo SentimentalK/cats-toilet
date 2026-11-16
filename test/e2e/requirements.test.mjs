@@ -32,19 +32,28 @@ import {
 const PORTS = { port: 8791, cdpPort: 9556 };
 const guard = (name) => 'e2e-seed-' + name;
 
+const ONBOARDING = [
+  { title: '猫会自己拉便便', text: '不用你点，猫过一会儿就自己去猫砂盆。盆满了它就憋着，还会生气。' },
+  { title: '铲屎换积分', text: '点便便或者下面的「铲屎」，把便便铲进垃圾袋，每坨都能换积分。' },
+  { title: '积分能买东西', text: '商店里有更高级的猫砂盆、新猫砂盆、猫窝、高级饭盆水盆、食物和玩具。' },
+  { title: '水和食物', text: '水盆点一下就加满，免费。食物要用积分买，吃完猫会饿。' },
+  { title: '撸猫', text: '点猫就是摸头，摸头免费。买了逗猫棒、小老鼠陪它玩，它更开心，便便来得更快。' },
+];
+
 test('需求 1 — 入门说明', { timeout: 90_000 }, async (t) => {
   await withGame(
     t,
     async ({ page, base, shotDir }) => {
       assert.equal(await isVisible(page, SEL.onboarding), true);
       assert.match(await page.text(SEL.onboardingCard), /猫会自己拉便便/);
-      assert.equal(await page.text(SEL.onboardingText), '不用你点，猫过一会儿就自己去猫砂盆。盆满了它就憋着，还会生气。');
 
-      for (let i = 0; i < 10 && (await page.text(SEL.onboardingNext)).trim() !== '开始养猫'; i++) {
+      for (const [i, step] of ONBOARDING.entries()) {
+        const last = i === ONBOARDING.length - 1;
+        assert.equal((await page.text(SEL.onboardingStep)).trim(), step.title);
+        assert.equal((await page.text(SEL.onboardingText)).trim(), step.text);
+        assert.equal((await page.text(SEL.onboardingNext)).trim(), last ? '开始养猫' : '下一步');
         await page.click(SEL.onboardingNext);
       }
-      assert.equal((await page.text(SEL.onboardingNext)).trim(), '开始养猫');
-      await page.click(SEL.onboardingNext);
       await waitHidden(page, SEL.onboarding);
 
       await reloadRoom(page, base + ROOM);
@@ -53,8 +62,9 @@ test('需求 1 — 入门说明', { timeout: 90_000 }, async (t) => {
 
       await page.click(SEL.help);
       await waitVisible(page, SEL.onboarding);
-      assert.equal((await page.text(SEL.onboardingStep)).trim(), '猫会自己拉便便');
-      assert.match(await page.text(SEL.onboardingText), /盆满了它就憋着/);
+      assert.equal((await page.text(SEL.onboardingStep)).trim(), ONBOARDING[0].title);
+      assert.equal((await page.text(SEL.onboardingText)).trim(), ONBOARDING[0].text);
+      assert.equal((await page.text(SEL.onboardingNext)).trim(), '下一步');
       await waitSettled(page, SEL.onboarding);
       await page.shot(`${shotDir}/req-01-onboarding.png`);
 
@@ -427,8 +437,9 @@ test('需求 9 — 看得出状态', { timeout: 90_000 }, async (t) => {
       assert.match(await page.text(SEL.reason('thirsty')), /渴/);
       assert.match(await page.text(SEL.reason('hungry')), /饿/);
       assert.match(await page.text(SEL.reason('full')), /满/);
-      assert.ok(Number.isFinite(Number((await page.text(SEL.moodText)).replace(/\D+/g, ''))));
-      assert.ok((await page.text(SEL.moodFace)).trim().length > 0);
+      assert.equal(await page.count(SEL.reason('lonely')), 0);
+      assert.equal((await page.text(SEL.moodFace)).trim(), '😾');
+      assert.equal((await page.text(SEL.moodText)).trim(), '心情 0');
 
       await centerOn(page, [SEL.boxSlot(0), SEL.boxSlot(2)]);
       await waitPoopsSettled(page);
@@ -476,6 +487,7 @@ test('需求 10 — 商店兑换', { timeout: 90_000 }, async (t) => {
       assert.equal(await page.evaluate('window.__game.state.owned.mouse'), true);
 
       await openShop(page, 'all');
+      await waitSettled(page, '#sheet');
       await page.shotViewport(`${shotDir}/req-10-shop.png`);
     },
     {
@@ -525,6 +537,9 @@ test('旧存档迁移', { timeout: 120_000 }, async (t) => {
       assert.equal(state.boxes[0].level, 4);
       assert.equal(state.boxes[0].poops.length, 2);
       assert.equal(state.owned.bed, true);
+      assert.equal(state.owned.bowlPro, true);
+      assert.equal(state.owned.bowl, undefined);
+      assert.equal(await page.evaluate('Object.prototype.hasOwnProperty.call(window.__game.state.owned, "bowl")'), false);
       assert.equal(state.wall, 'pink');
       assert.equal(state.cat.name, '豆豆');
       assert.equal((await page.text(SEL.pointsNum)).trim(), '777');
