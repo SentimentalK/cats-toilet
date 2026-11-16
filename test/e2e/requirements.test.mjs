@@ -89,11 +89,28 @@ test('需求 2 — 开局房间', { timeout: 90_000 }, async (t) => {
 
       assert.equal(await page.count(SEL.waterBowl), 1);
       assert.equal(await page.count(SEL.foodBowl), 1);
-      assert.equal(await isVisible(page, SEL.waterBowl), true);
-      assert.equal(await isVisible(page, SEL.foodBowl), true);
 
       await page.waitFor(`!!document.querySelector(${JSON.stringify(SEL.catSleep)})`, 5000);
-      await centerOn(page, [SEL.waterBowl, SEL.foodBowl]);
+      const inView = (page, selectors) => page.evaluate(`(() => {
+        const room = document.querySelector('#room');
+        const view = { left: 0, right: room.clientWidth };
+        return ${JSON.stringify(selectors)}.map((selector) => {
+          const el = document.querySelector(selector);
+          if (!el) return { selector, missing: true, inView: false };
+          const r = el.getBoundingClientRect();
+          return {
+            selector,
+            left: Number(r.left.toFixed(1)),
+            right: Number(r.right.toFixed(1)),
+            width: Number(r.width.toFixed(1)),
+            view,
+            inView: r.width > 0 && r.right > view.left && r.left < view.right,
+          };
+        });
+      })()`);
+      const opening = await inView(page, [SEL.boxSlot(0), SEL.waterBowl, SEL.foodBowl, SEL.cat]);
+      assert.deepEqual(opening.map((r) => r.inView), [true, true, true, true], JSON.stringify(opening, null, 2));
+      assert.equal(await page.count(SEL.catSleep), 1);
       await page.shot(`${shotDir}/req-02-room.png`);
 
       await page.viewport(1440, 900);
@@ -221,6 +238,14 @@ test('需求 5 — 三个盆', { timeout: 90_000 }, async (t) => {
 
       await centerOn(page, [SEL.boxSlot(0), SEL.boxSlot(2)]);
       await waitPoopsSettled(page);
+      await page.waitFor(
+        `(() => {
+          const bubble = document.querySelector('#bubble');
+          const fx = document.querySelector('#fx');
+          return !!bubble && bubble.hidden && !!fx && fx.children.length === 0;
+        })()`,
+        8000,
+      );
       await page.shot(`${shotDir}/req-05-three-boxes.png`);
 
       await page.viewport(1440, 900);
