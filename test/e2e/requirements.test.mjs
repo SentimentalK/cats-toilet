@@ -335,6 +335,8 @@ test('需求 7 — 食物', { timeout: 120_000 }, async (t) => {
       assert.equal(fed.points, before.points - 10);
       assert.ok(fed.food > before.food);
       assert.match(await page.text(SEL.foodText), /份/);
+      assert.equal(await page.evaluate("document.querySelector('#food-bowl img').getAttribute('src')"), 'assets/bowl-full.png');
+      await page.waitFor("document.querySelector('#cat').dataset.pose === 'eat'");
 
       const poor = await makeUser(base);
       await page.addInitScript(seedScript({ token: poor.token, save: freshSave({ points: 0 }), guard: guard('req07b') }));
@@ -357,12 +359,15 @@ test('需求 7 — 食物', { timeout: 120_000 }, async (t) => {
       await page.addInitScript(seedScript({ token: empty.token, save: freshSave({ points: 50, food: 0 }), guard: guard('req07d') }));
       await reloadRoom(page, base + ROOM);
       await skipOnboarding(page);
+      assert.equal(await page.evaluate("document.querySelector('#food-bowl img').getAttribute('src')"), 'assets/bowl-empty.png');
       await page.click(SEL.foodBowl);
+      assert.equal(await page.evaluate("document.querySelector('#food-bowl img').getAttribute('src')"), 'assets/bowl-full.png');
       const one = await page.evaluate('window.__game.state');
       assert.equal(one.food, 1);
       assert.equal(one.points, 40);
       await advance(page, 4 * 3600000);
       assert.equal((await page.text(SEL.foodText)).trim(), '饭盆空啦');
+      assert.equal(await page.evaluate("document.querySelector('#food-bowl img').getAttribute('src')"), 'assets/bowl-empty.png');
       await waitVisible(page, SEL.reason('hungry'));
 
       await centerOn(page, [SEL.foodBowl]);

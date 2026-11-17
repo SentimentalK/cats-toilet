@@ -27,6 +27,9 @@
 
   const LEVELS = SIM.BOX_LEVELS;
   const SLEEP_AFTER_MS = 25000;
+  const EAT_MS = 3200;
+  const FOOD_BOWL_FULL = 'assets/bowl-full.png';
+  const FOOD_BOWL_EMPTY = 'assets/bowl-empty.png';
   const FOCUS_X = 44;
   const SAVE_EVERY_MS = 10000;
 
@@ -64,6 +67,7 @@
     squat: { k: 1, aspect: 1.27, butt: { x: 0.79, y: 0.81 } },
     sleep: { k: 1.3 },
     happy: { k: 1.15 },
+    eat: { k: 1.2 },
     loaf: { k: 1.3 },
     groom: { k: 1.06 },
     yawn: { k: 1.03 },
@@ -661,6 +665,10 @@
     const foodPct = Math.round(state.food / SIM.FOOD_CAP * 100);
     el.foodText.textContent = state.food <= 0 ? '饭盆空啦' : '饭盆 ' + state.food.toFixed(1) + ' 份';
     el.foodBar.style.width = clamp(foodPct, 0, 100) + '%';
+    const bowlSrc = state.food > 0 ? FOOD_BOWL_FULL : FOOD_BOWL_EMPTY;
+    const bowlImg = el.foodBowl.querySelector('img');
+    if (bowlImg.getAttribute('src') !== bowlSrc) bowlImg.setAttribute('src', bowlSrc);
+    el.foodBowl.classList.toggle('has-food', state.food > 0);
     el.reasons.innerHTML = SIM.reasons(state, t)
       .map((r) => `<li class="reason" data-reason="${r.id}">${r.text}</li>`).join('');
     const total = state.boxes.reduce((n, box) => n + box.poops.length, 0);
@@ -937,9 +945,20 @@
     state.foodKind = id;
     save(); renderPanel(); renderTick(now());
     if (sheetKind === 'shop') refreshSheet();
-    say('吧唧吧唧…好吃喵！');
     poke();
+    pop(el.foodBowl.querySelector('img'));
+    eatAtBowl();
     return true;
+  }
+
+  function eatAtBowl() {
+    if (busy || squattingNow) { say('吧唧吧唧…好吃喵！'); return; }
+    go('bowl', 'eat', () => {
+      say('吧唧吧唧…好吃喵！', EAT_MS);
+      setTimeout(() => {
+        if (!busy && cat.at === 'bowl') go('idle', 'sit');
+      }, EAT_MS);
+    });
   }
 
   function playToy(id) {
