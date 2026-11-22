@@ -69,6 +69,43 @@
 
 ## 4. Cloudflare Cache Rules
 
+### 4.0 CLI 选型（2026-11-22 实测）
+
+Cloudflare 现在有一个官方统一 CLI `cf`（release candidate，本机实测 v0.15.0），它把公开 API 生成了 2900+ 命令，**能直接管 zone 的 Cache Rules**。`wrangler` 仍然只管 Workers/Pages/KV/R2，不管 zone cache rules。
+
+| 工具 | 能管 Cache Rules？ | 适合 | 备注 |
+| --- | --- | --- | --- |
+| Cloudflare `cf` | 是 | 想用官方 CLI / 脚本化 | `cf rulesets account-rulesets ...`，phase `http_request_cache_settings` |
+| `wrangler` | 否 | Workers/Pages/KV/R2 | 不要用它配 zone 缓存 |
+| `flarectl` | 部分（按版本） | 传统 zone/DNS/防火墙 | 非本仓库首选；Cache Rules 走 Rulesets API 更直接 |
+| Terraform | 是 | 已有 IaC | `cloudflare_ruleset`，phase 同上 |
+| 本仓库脚本 | 是 | 无依赖、CI、dry-run | `tools/cf-cache-rules.mjs`，推荐本仓库使用 |
+| Dashboard | 是 | 一次性手动 | Cache Rules + Browser Cache TTL |
+
+`cf` 的命令形状（命令树已在本地验证，未用真实 token 执行）：
+
+```sh
+npm install --global cf
+cf auth login                       # 或 export CLOUDFLARE_API_TOKEN=...
+cf --version
+
+# 查看当前 entrypoint（不存在会 404）
+cf rulesets account-rulesets phases get http_request_cache_settings -z cats.mainstayx.com
+
+# 404 时先 create（kind=zone, phase=http_request_cache_settings），再 update
+cf rulesets account-rulesets create -z cats.mainstayx.com \
+  --kind zone --phase http_request_cache_settings \
+  --name "cats-toilet cache rules" --rules @rules.json
+cf rulesets account-rulesets phases update http_request_cache_settings -z cats.mainstayx.com \
+  --rules @rules.json
+
+# 部署后 purge
+cf cache purge -z cats.mainstayx.com --force \
+  --body '{"purge_everything":true}'
+```
+
+`rules.json` 用 `node tools/cf-cache-rules.mjs --dry-run | jq .body.rules > rules.json` 生成，或直接按 4.1 的脚本来回 merge（脚本会保留其他规则）。本仓库仍推荐脚本：零依赖、dry-run、CI 可用、缺 token 时不会发请求。
+
 ### 4.1 用脚本（推荐，可 Review）
 
 `tools/cf-cache-rules.mjs` 零依赖，读环境变量，不读写仓库：
@@ -113,7 +150,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/pur
   -H "content-type: application/json" --data '{"purge_everything":true}'
 ```
 
-purge 只清边缘；浏览器里已存的旧资源靠 `sw.js` 的 `VERSION` + `cache: 'reload'` 更新。`wrangler` 不管 zone cache rules（它只管 Workers/Pages/KV/R2），所以本仓库用 REST 脚本。
+purge 只清边缘；浏览器里已存的旧资源靠 `sw.js` 的 `VERSION` + `cache: 'reload'` 更新。`wrangler` 不管 zone cache rules（它只管 Workers/Pages/KV/R2）；`cf` 可以（见 4.0），本仓库默认用 REST 脚本以免多一个全局依赖。
 
 ## 5. 审计
 
