@@ -50,7 +50,7 @@ test('需求 1 — 入门说明', { timeout: 90_000 }, async (t) => {
       for (const [i, step] of ONBOARDING.entries()) {
         const last = i === ONBOARDING.length - 1;
         assert.equal((await page.text(SEL.onboardingStep)).trim(), step.title);
-        assert.equal((await page.text(SEL.onboardingText)).trim(), step.text);
+        assert.equal(await page.evaluate("document.querySelector('#onboarding-text').textContent"), step.text);
         assert.equal((await page.text(SEL.onboardingNext)).trim(), last ? '开始养猫' : '下一步');
         await page.click(SEL.onboardingNext);
       }
@@ -63,7 +63,7 @@ test('需求 1 — 入门说明', { timeout: 90_000 }, async (t) => {
       await page.click(SEL.help);
       await waitVisible(page, SEL.onboarding);
       assert.equal((await page.text(SEL.onboardingStep)).trim(), ONBOARDING[0].title);
-      assert.equal((await page.text(SEL.onboardingText)).trim(), ONBOARDING[0].text);
+      assert.equal(await page.evaluate("document.querySelector('#onboarding-text').textContent"), ONBOARDING[0].text);
       assert.equal((await page.text(SEL.onboardingNext)).trim(), '下一步');
       await waitSettled(page, SEL.onboarding);
       await page.shot(`${shotDir}/req-01-onboarding.png`);
@@ -145,7 +145,7 @@ test('需求 2 — 开局房间', { timeout: 90_000 }, async (t) => {
     },
     {
       ...PORTS,
-      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave(), guard: guard('req02') }),
+      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ boxes: [{ level: 0, poops: [] }], starterBonus: 0 }), guard: guard('req02') }),
       path: ROOM,
     },
   );
@@ -163,7 +163,7 @@ test('需求 3 — 自己产便便 / 离线补算 / 盆满', { timeout: 90_000 }
       await page.addInitScript(
         seedScript({
           token: userB.token,
-          save: freshSave({ sim: { at: CLOCK - 6 * 3600000, fill: 0, lastPoopAt: 0 } }),
+          save: freshSave({ sim: { at: CLOCK - 6 * 3600000, fill: 0, lastPoopAt: 0 }, boxes: [{ level: 0, poops: [] }], starterBonus: 0 }),
           guard: guard('req03b'),
         }),
       );
@@ -180,7 +180,7 @@ test('需求 3 — 自己产便便 / 离线补算 / 盆满', { timeout: 90_000 }
     },
     {
       ...PORTS,
-      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave(), guard: guard('req03a') }),
+      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ boxes: [{ level: 0, poops: [] }], starterBonus: 0 }), guard: guard('req03a') }),
       path: ROOM,
     },
   );
@@ -218,7 +218,7 @@ test('需求 4 — 公式与积分', { timeout: 90_000 }, async (t) => {
     },
     {
       ...PORTS,
-      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave(), guard: guard('req04a') }),
+      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ boxes: [{ level: 0, poops: [] }], starterBonus: 0 }), guard: guard('req04a') }),
       path: ROOM,
     },
   );
@@ -285,7 +285,7 @@ test('需求 5 — 三个盆', { timeout: 90_000 }, async (t) => {
     },
     {
       ...PORTS,
-      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ points: 5000, food: 3 }), guard: guard('req05') }),
+      init: async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ points: 5000, food: 3, boxes: [{ level: 0, poops: [] }], starterBonus: 0 }), guard: guard('req05') }),
       path: ROOM,
     },
   );
@@ -306,8 +306,8 @@ test('需求 6 — 水', { timeout: 90_000 }, async (t) => {
       assert.equal(await page.count(SEL.reason('thirsty')), 0);
       assert.equal(await page.evaluate('window.__game.state.points'), points);
 
-      const dry = JSON.parse(JSON.stringify(freshSave({ water: 0 })));
-      const wet = JSON.parse(JSON.stringify(freshSave({ water: 1 })));
+      const dry = JSON.parse(JSON.stringify(freshSave({ water: 0, boxes: [{ level: 0, poops: [] }], starterBonus: 0 })));
+      const wet = JSON.parse(JSON.stringify(freshSave({ water: 1, boxes: [{ level: 0, poops: [] }], starterBonus: 0 })));
       SIM.simulate(dry, CLOCK + 3600000);
       SIM.simulate(wet, CLOCK + 3600000);
       const lumps = (s) => s.boxes.reduce((n, b) => n + b.poops.length, 0);

@@ -19,6 +19,7 @@ test('serves the game and its assets with the right types', async (t) => {
     ['/css/style.css', /^text\/css/],
     ['/manifest.webmanifest', /^application\/manifest\+json/],
     ['/sw.js', /^text\/javascript/],
+    ['/assets/audio/bgm.mp3', /^audio\/mpeg$/],
   ];
   // The client is being edited; pick whatever top-level art exists right now.
   const art = readdirSync(`${root}assets`);
@@ -66,4 +67,13 @@ test('never serves server code, design, tools, raw art, dotfiles or traversal', 
   assert.equal(post.status, 405);
   const err = await post.json();
   assert.equal(err.error.code, 'method_not_allowed');
+});
+
+test('service worker shell precaches every script index.html loads', () => {
+  const html = readFileSync(`${root}index.html`, 'utf8');
+  const sw = readFileSync(`${root}sw.js`, 'utf8');
+  const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  const shell = (sw.match(/const SHELL = \[([\s\S]*?)\];/) || [])[1] || '';
+  assert.ok(scripts.length >= 7, `found ${scripts.length} scripts in index.html`);
+  for (const src of scripts) assert.ok(shell.includes(`'${src}'`), `${src} missing from SHELL`);
 });

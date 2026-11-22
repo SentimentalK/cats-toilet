@@ -64,3 +64,17 @@ background.
 - Half: water sits clearly lower; a broad band of darker blue inner wall is
   visible above it, highlight is a small arc near the front. Distinguishable at
   78 px, obvious at 260 px.
+
+## Game wiring
+
+`js/game.js` picks the sprite from the simulated water level on every render:
+
+| `state.water` | Sprite |
+| --- | --- |
+| `<= 0` | `assets/bowl-empty.png` |
+| `> 0` and `< 0.5` | `assets/water-bowl-half.png` |
+| `>= 0.5` | `assets/water-bowl-full.png` |
+
+The old `#water-bowl` CSS `hue-rotate` filters are removed; the shop card for
+`waterPro` shows `assets/water-bowl-full.png`. The images are precached in
+`sw.js` (`VERSION = 'v7'`).

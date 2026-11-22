@@ -33,6 +33,8 @@ const CONSTANT_NAMES = [
   'MAX_BOXES',
   'FRESHENER_BONUS',
   'FOOD_CAP',
+  'STARTER_BONUS',
+  'START_POOP_COUNT',
 ];
 
 const PRICE_IDS = [
@@ -80,6 +82,13 @@ function threeBoxes(level) {
   return [SIM.createBox(level), SIM.createBox(level), SIM.createBox(level)];
 }
 
+function blank(now = 0) {
+  const s = SIM.fresh(now);
+  s.boxes = [SIM.createBox(0)];
+  s.starterBonus = 0;
+  return s;
+}
+
 test('常数表与模块导出一致', () => {
   const rows = parseTable('| 常数 | 值 | 依据 |');
   assert.equal(rows.length, CONSTANT_NAMES.length);
@@ -111,7 +120,7 @@ test('价格表覆盖全部条目且换算正确', () => {
 });
 
 test('中性心情一小时出两团', () => {
-  const s = SIM.fresh(0);
+  const s = blank(0);
   const produced = SIM.simulate(s, 3600000);
   assert.equal(produced, 2);
   assert.equal(totalPoops(s), 2);
@@ -119,7 +128,7 @@ test('中性心情一小时出两团', () => {
 });
 
 test('离线一天封顶于三个零级盆的总容量', () => {
-  const s = SIM.fresh(0);
+  const s = blank(0);
   s.boxes = threeBoxes(0);
   const produced = SIM.simulate(s, 86400000);
   assert.equal(produced, 9);
@@ -128,17 +137,17 @@ test('离线一天封顶于三个零级盆的总容量', () => {
 });
 
 test('水耗尽后产出变慢', () => {
-  const empty = SIM.fresh(0);
+  const empty = blank(0);
   empty.boxes = threeBoxes(10);
   empty.water = 0;
   empty.food = 1;
   assert.equal(SIM.simulate(empty, 7200000), 1);
 
-  const full = SIM.fresh(0);
+  const full = blank(0);
   full.boxes = threeBoxes(10);
   assert.equal(SIM.simulate(full, 7200000), 4);
 
-  const dry = SIM.fresh(0);
+  const dry = blank(0);
   dry.water = 0;
   dry.food = 0;
   const expected =
@@ -150,12 +159,12 @@ test('水耗尽后产出变慢', () => {
 });
 
 test('食物耗尽后产出变慢', () => {
-  const hungry = SIM.fresh(0);
+  const hungry = blank(0);
   hungry.boxes = threeBoxes(10);
   hungry.food = 0;
   hungry.water = 1;
   assert.equal(SIM.simulate(hungry, 7200000), 1);
-  const starving = SIM.fresh(0);
+  const starving = blank(0);
   starving.food = 0;
   starving.water = 0;
   assert.equal(SIM.factors(starving, 0).food, SIM.EMPTY_FACTOR);
@@ -168,7 +177,7 @@ test('心情系数始终落在上下限内', () => {
   for (const now of nows) {
     for (const petAt of [0, now - 300000, now, now + 60000]) {
       for (const playAt of [0, now - 300000, now, now + 60000]) {
-        const s = SIM.fresh(0);
+        const s = blank(0);
         s.mood.petAt = petAt;
         s.mood.playAt = playAt;
         const mood = SIM.factors(s, now).mood;
@@ -177,10 +186,10 @@ test('心情系数始终落在上下限内', () => {
     }
   }
 
-  const idle = SIM.fresh(0);
+  const idle = blank(0);
   assert.equal(SIM.factors(idle, 5000).mood, 1);
 
-  const happy = SIM.fresh(0);
+  const happy = blank(0);
   happy.owned.wand = true;
   SIM.pet(happy, 60000);
   assert.ok(SIM.playWith(happy, 'wand', 60000));
@@ -189,17 +198,17 @@ test('心情系数始终落在上下限内', () => {
 });
 
 test('渴饿满都会压低心情', () => {
-  assert.equal(SIM.moodScore(SIM.fresh(0), 0), 50);
+  assert.equal(SIM.moodScore(blank(0), 0), 50);
 
-  const thirsty = SIM.fresh(0);
+  const thirsty = blank(0);
   thirsty.water = 0;
   assert.equal(SIM.moodScore(thirsty, 0), 30);
 
-  const hungry = SIM.fresh(0);
+  const hungry = blank(0);
   hungry.food = 0;
   assert.equal(SIM.moodScore(hungry, 0), 30);
 
-  const full = SIM.fresh(0);
+  const full = blank(0);
   full.boxes = threeBoxes(0);
   for (const box of full.boxes) {
     while (box.poops.length < SIM.BOX_LEVELS[box.level].cap) box.poops.push({ id: full.seq++, kind: 0 });
@@ -208,7 +217,7 @@ test('渴饿满都会压低心情', () => {
   full.boxes[0].poops.pop();
   assert.equal(SIM.moodScore(full, 0), 50);
 
-  const all = SIM.fresh(0);
+  const all = blank(0);
   all.water = 0;
   all.food = 0;
   all.boxes = threeBoxes(0);
@@ -220,17 +229,17 @@ test('渴饿满都会压低心情', () => {
 });
 
 test('逐段推进与一次推进结果相同', () => {
-  const once = SIM.fresh(0);
+  const once = blank(0);
   SIM.simulate(once, 6 * 3600000);
 
-  const stepped = SIM.fresh(0);
+  const stepped = blank(0);
   for (let i = 1; i <= 360; i++) SIM.simulate(stepped, i * 60000);
 
   assert.equal(JSON.stringify(stepped), JSON.stringify(once));
 });
 
 test('猫优先拉进没满的盆', () => {
-  const s = SIM.fresh(0);
+  const s = blank(0);
   s.boxes = threeBoxes(0);
   for (let i = 0; i < 3; i++) s.boxes[0].poops.push({ id: s.seq++, kind: 0 });
   SIM.simulate(s, 1800000);
@@ -240,7 +249,7 @@ test('猫优先拉进没满的盆', () => {
 });
 
 test('三盆全满时停止产出', () => {
-  const s = SIM.fresh(0);
+  const s = blank(0);
   s.boxes = threeBoxes(0);
   for (const box of s.boxes) {
     while (box.poops.length < SIM.BOX_LEVELS[box.level].cap) box.poops.push({ id: s.seq++, kind: 0 });
@@ -254,7 +263,7 @@ test('三盆全满时停止产出', () => {
   assert.ok(SIM.reasons(s, 86400000).find((r) => r.id === 'full').text.includes('个盆都满了'));
   assert.equal(SIM.isSquatting(s, 86400000), false);
 
-  const single = SIM.fresh(0);
+  const single = blank(0);
   while (single.boxes[0].poops.length < SIM.BOX_LEVELS[0].cap) {
     single.boxes[0].poops.push({ id: single.seq++, kind: 0 });
   }
@@ -264,7 +273,7 @@ test('三盆全满时停止产出', () => {
 });
 
 test('孤单原因只在互动过之后才报', () => {
-  const s = SIM.fresh(0);
+  const s = blank(0);
   assert.ok(!SIM.reasons(s, 0).some((r) => r.id === 'lonely'));
   assert.ok(!SIM.reasons(s, 600000).some((r) => r.id === 'lonely'));
 
@@ -316,7 +325,7 @@ test('旧存档无损迁移', () => {
 });
 
 test('积分按盆等级结算并计入铲出数', () => {
-  const zero = SIM.fresh(0);
+  const zero = blank(0);
   assert.equal(SIM.poopValue(zero, 0), 10);
   zero.boxes[0].poops.push({ id: 1, kind: 0 });
   const gain = SIM.scoop(zero, 0, 1);
@@ -325,11 +334,11 @@ test('积分按盆等级结算并计入铲出数', () => {
   assert.equal(zero.totalScooped, 1);
   assert.equal(zero.boxes[0].poops.length, 0);
 
-  const top = SIM.fresh(0);
+  const top = blank(0);
   top.boxes = [SIM.createBox(10)];
   assert.equal(SIM.poopValue(top, 0), 60);
 
-  const freshAir = SIM.fresh(0);
+  const freshAir = blank(0);
   freshAir.owned.freshener = true;
   assert.equal(SIM.poopValue(freshAir, 0), 15);
   freshAir.boxes = [SIM.createBox(10)];
@@ -337,31 +346,31 @@ test('积分按盆等级结算并计入铲出数', () => {
 });
 
 test('水粮按固定时长线性消耗', () => {
-  const wet = SIM.fresh(0);
+  const wet = blank(0);
   SIM.simulate(wet, 8 * 3600000);
   assert.equal(wet.water, 0);
 
-  const fed = SIM.fresh(0);
+  const fed = blank(0);
   SIM.simulate(fed, 3 * 3600000);
   assert.equal(fed.food, 0);
 });
 
 test('蹲坑窗口只在快满或刚拉完时成立', () => {
-  const almost = SIM.fresh(0);
+  const almost = blank(0);
   almost.sim.fill = 1 - 30000 * SIM.rateAt(almost, 0);
   assert.equal(SIM.isSquatting(almost, 0), true);
 
-  const clean = SIM.fresh(0);
+  const clean = blank(0);
   assert.equal(SIM.isSquatting(clean, 0), false);
 
-  const justPooped = SIM.fresh(0);
+  const justPooped = blank(0);
   justPooped.sim.lastPoopAt = 1000000;
   assert.equal(SIM.isSquatting(justPooped, 1002000), true);
   assert.equal(SIM.isSquatting(justPooped, 1005000), false);
 });
 
 test('时间回退时不动状态', () => {
-  const s = SIM.fresh(10000);
+  const s = blank(10000);
   const before = JSON.stringify(s);
   assert.equal(SIM.simulate(s, 5000), 0);
   assert.equal(JSON.stringify(s), before);
@@ -370,20 +379,20 @@ test('时间回退时不动状态', () => {
 });
 
 test('离线三十天既快又与逐日推进一致', () => {
-  const whole = SIM.fresh(0);
+  const whole = blank(0);
   const startedAt = performance.now();
   const produced = SIM.simulate(whole, 30 * 86400000);
   const elapsed = performance.now() - startedAt;
   assert.ok(elapsed < 500, `耗时 ${elapsed} ms`);
   assert.equal(produced, 3);
 
-  const daily = SIM.fresh(0);
+  const daily = blank(0);
   for (let day = 1; day <= 30; day++) SIM.simulate(daily, day * 86400000);
   assert.equal(JSON.stringify(whole), JSON.stringify(daily));
 });
 
 test('顶层等级跟随各盆最高等级', () => {
-  const s = SIM.fresh(0);
+  const s = blank(0);
   assert.equal(s.level, 0);
   s.points = 10000;
   const upgraded = SIM.upgradeBox(s, 0);
@@ -405,7 +414,7 @@ test('顶层等级跟随各盆最高等级', () => {
 });
 
 test('饭盆容量拒绝超装', () => {
-  const full = SIM.fresh(0);
+  const full = blank(0);
   full.points = 1000;
   full.totalScooped = 20;
   full.food = SIM.FOOD_CAP;
@@ -414,13 +423,13 @@ test('饭盆容量拒绝超装', () => {
   assert.equal(full.points, 1000);
   assert.equal(full.food, SIM.FOOD_CAP);
 
-  const nearly = SIM.fresh(0);
+  const nearly = blank(0);
   nearly.points = 1000;
   nearly.totalScooped = 20;
   nearly.food = 2.5;
   assert.equal(SIM.canBuyFood(nearly, 'can').why, 'full');
 
-  const roomy = SIM.fresh(0);
+  const roomy = blank(0);
   roomy.points = 1000;
   roomy.totalScooped = 20;
   roomy.food = 1;
@@ -429,4 +438,66 @@ test('饭盆容量拒绝超装', () => {
   assert.equal(bought.id, 'can');
   assert.equal(roomy.food, SIM.FOOD_CAP);
   assert.equal(roomy.points, 1000 - SIM.PRICES.can);
+});
+
+test('新存档带三坨便便与新手礼', () => {
+  const s = SIM.fresh(0);
+  assert.equal(s.boxes.length, 1);
+  assert.equal(s.boxes[0].level, 0);
+  assert.deepEqual(s.boxes[0].poops, [
+    { id: 1, kind: 0 },
+    { id: 2, kind: 1 },
+    { id: 3, kind: 1 },
+  ]);
+  assert.equal(s.seq, 4);
+  assert.equal(s.starterBonus, SIM.STARTER_BONUS);
+  assert.equal(s.starterBonus, 70);
+  assert.equal(SIM.START_POOP_COUNT, 3);
+  assert.equal(s.points, 0);
+  assert.equal(s.totalScooped, 0);
+  assert.equal(SIM.BOX_LEVELS[0].cap, 3);
+});
+
+test('单坨首铲带新手礼，第二次没有', () => {
+  const s = SIM.fresh(0);
+  assert.equal(SIM.poopValue(s, 0), 10);
+  assert.equal(SIM.scoop(s, 0, 1), 80);
+  assert.equal(s.points, 80);
+  assert.equal(s.starterBonus, 0);
+  assert.equal(s.totalScooped, 1);
+  assert.equal(SIM.scoop(s, 0, 2), 10);
+  assert.equal(s.points, 90);
+  assert.equal(s.totalScooped, 2);
+  assert.equal(s.starterBonus, 0);
+});
+
+test('一键铲空首铲一百，新手礼只发一次', () => {
+  const s = SIM.fresh(0);
+  assert.equal(SIM.scoopAll(s), 100);
+  assert.equal(s.points, 100);
+  assert.equal(s.totalScooped, 3);
+  assert.equal(s.starterBonus, 0);
+  assert.equal(totalPoops(s), 0);
+
+  const before = s.points;
+  assert.equal(SIM.scoopAll(s), 0);
+  assert.equal(s.points, before);
+  assert.equal(s.totalScooped, 3);
+});
+
+test('老存档迁移不注入便便也不发新手礼', () => {
+  const v1 = SIM.migrate({ points: 40, level: 2, poops: [{ id: 7, kind: 0 }], seq: 8, totalScooped: 2 }, 0);
+  assert.equal(v1.starterBonus, 0);
+  assert.deepEqual(v1.boxes[0].poops, [{ id: 7, kind: 0 }]);
+
+  const v1Empty = SIM.migrate({ points: 40, level: 2, totalScooped: 2 }, 0);
+  assert.equal(v1Empty.starterBonus, 0);
+  assert.equal(totalPoops(v1Empty), 0);
+
+  const v2 = SIM.migrate({ v: 2, points: 5, boxes: [], water: 1, food: 1, sim: { at: 0, fill: 0, lastPoopAt: 0 } }, 0);
+  assert.equal(v2.starterBonus, 0);
+  assert.equal(totalPoops(v2), 0);
+
+  const negative = SIM.migrate({ v: 2, points: 5, starterBonus: -12, boxes: [{ level: 0, poops: [] }], water: 1, food: 1, sim: { at: 0, fill: 0, lastPoopAt: 0 } }, 0);
+  assert.equal(negative.starterBonus, 0);
 });
