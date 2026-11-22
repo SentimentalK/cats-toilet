@@ -89,7 +89,7 @@ node tools/cf-cache-rules.mjs --apply
 | static assets | `/assets/` 前缀 | edge 604,800 s、browser 604,800 s |
 | code | `/js/` 或 `/css/` 前缀 | edge 3,600 s、browser 3,600 s |
 
-`--apply` 先 `GET /zones/{zone}/rulesets/phases/http_request_cache_settings/entrypoint`，按 `cats-toilet:` description 前缀替换本项目的规则，其他规则原样保留并排在后面；随后 `PUT` 同一 entrypoint。Cloudflare 按顺序匹配，本项目规则放最前，窄路径表达式不会影响其他路径。
+`--apply` 先 `GET /zones/{zone}/rulesets/phases/http_request_cache_settings/entrypoint`：entrypoint 不存在（404）时按 Cloudflare 文档用 `POST /zones/{zone}/rulesets` 建 `kind: zone`、`phase: http_request_cache_settings` 的规则集；已存在时按 `cats-toilet:` description 前缀替换本项目的规则，其他规则原样保留并排在后面，再 `PUT` 同一 entrypoint。Cloudflare 按顺序匹配，本项目规则放最前，窄路径表达式不会影响其他路径。
 
 token 权限：**Zone:Read** + **Zone:Cache Rules:Edit**；purge 另需 **Zone:Cache Purge**。使用 zone 级 token，不要用 Global API Key。缺 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ZONE_ID` 时 `--apply` 直接非零退出，不发送请求、不打印 token。
 

@@ -112,14 +112,21 @@ function apiError(step, res, token) {
 async function apply(token, zone) {
   const url = endpoint(zone);
   const got = await cf('GET', url, token);
-  let existing = [];
-  if (got.status === 200) {
-    existing = got.json?.result?.rules ?? [];
-  } else if (got.status !== 404) {
-    throw new Error(apiError('GET entrypoint', got, token));
-  } else {
-    process.stdout.write('no cache-rules entrypoint yet; PUT will create it\n');
+  if (got.status === 404) {
+    // The phase ruleset does not exist yet; create it with our rules.
+    const created = await cf('POST', `${API}/zones/${encodeURIComponent(zone)}/rulesets`, token, {
+      name: 'cats-toilet cache rules',
+      kind: 'zone',
+      phase: PHASE,
+      rules: RULES,
+    });
+    if (created.status < 200 || created.status >= 300) throw new Error(apiError('POST ruleset', created, token));
+    console.log(`created the cache-rules entrypoint for zone ${zone}: HTTP ${created.status}`);
+    for (const r of created.json?.result?.rules ?? RULES) console.log(`  - ${r.description || '(no description)'}`);
+    return;
   }
+  if (got.status !== 200) throw new Error(apiError('GET entrypoint', got, token));
+  const existing = got.json?.result?.rules ?? [];
 
   const keep = existing.filter((r) => !String(r.description ?? '').startsWith(PREFIX));
   const replaced = existing.length - keep.length;
