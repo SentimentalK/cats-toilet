@@ -1,6 +1,6 @@
 # 猫猫房间：音频 v1
 
-本文定义 `js/audio.js` 的 Web Audio 引擎、`js/rich.js` 之外的音频资源约定，以及 `tools/make_audio.py` 的合成口径。所有声源都由仓库内脚本合成，不含任何外部版权素材。
+本文定义 `js/audio.js` 的 Web Audio 引擎、`js/rich.js` 之外的音频资源约定，以及 `tools/make_audio.py` 的生成口径。BGM 与 4 个猫叫由仓库内脚本合成；`purr` 使用 Public Domain 真实录音（Mysid），源文件与授权说明在 `assets/audio/source/`。
 
 ## 架构与自动播放
 
@@ -15,14 +15,14 @@
 
 ## 6 个 id 与语义
 
-| id | 语义 | 时长 | 合成 |
+| id | 语义 | 时长 | 来源 |
 | --- | --- | --- | --- |
-| bgm | 背景音乐 | 32.0 s | 120 BPM，C–G–Am–F，正弦/三角波旋律 + 低音 + 琶音 |
-| purr | 打呼噜 | 1.2 s | 72 Hz 载波 3 次谐波，25 Hz 调幅 |
-| meow | 短喵 | 0.55 s | 700→450 Hz 滑音，3 个谐波 |
-| meow-long | 长喵 | 1.2 s | 620→380→480 Hz 两段滑音 |
-| trill | 颤音 | 0.7 s | 520 Hz 载波，18 Hz 颤音调幅 |
-| happy | 开心喵 | 0.8 s | 600→760 Hz、700→900 Hz 两段上扬 |
+| bgm | 背景音乐 | 32.0 s | 合成：120 BPM，C–G–Am–F，正弦/三角波旋律 + 低音 + 琶音 |
+| purr | 打呼噜 | 3.0 s | 真实录音：Mysid，Public Domain（Wikimedia Commons `Purring_cat.oga`），截 0.5–3.5 s + loudnorm |
+| meow | 短喵 | 0.55 s | 合成：700→450 Hz 滑音，3 个谐波 |
+| meow-long | 长喵 | 1.2 s | 合成：620→380→480 Hz 两段滑音 |
+| trill | 颤音 | 0.7 s | 合成：520 Hz 载波，18 Hz 颤音调幅 |
+| happy | 开心喵 | 0.8 s | 合成：600→760 Hz、700→900 Hz 两段上扬 |
 
 `SOUND_IDS = ['purr','meow','meow-long','trill','happy']`（打呼噜、短喵、长喵、颤音、开心喵），`BGM_ID = 'bgm'`。
 
@@ -57,7 +57,7 @@
 
 ## 编码与预算
 
-`tools/make_audio.py` 只用 Python 标准库（`wave`、`math`、`struct`、`random`、`subprocess`、`argparse`、`pathlib`），固定随机种子，同参数重跑输出同字节。合成 44100 Hz、单声道、16-bit WAV，峰值归一化到约 −6 dBFS（0.5 幅度），首尾各 10 ms 线性 fade，再逐文件转码：
+`tools/make_audio.py` 只用 Python 标准库（`wave`、`math`、`struct`、`subprocess`、`argparse`、`pathlib`）。BGM 与 4 个合成猫叫由脚本合成 44100 Hz、单声道、16-bit WAV，峰值归一化到约 −6 dBFS（0.5 幅度），首尾各 10 ms 线性 fade，再逐文件转码：
 
 ```
 ffmpeg -hide_banner -loglevel error -y -i <wav> \
@@ -65,19 +65,32 @@ ffmpeg -hide_banner -loglevel error -y -i <wav> \
   -fflags +bitexact -flags:a +bitexact -map_metadata -1 -id3v2_version 0 <out>.mp3
 ```
 
+`purr` 不走合成：脚本从 `assets/audio/source/purring-cat-mysid.oga` 截 0.5–3.5 s，做 loudnorm 后直接转码；源文件缺失时脚本明确报错并非 0 退出，不回退合成。
+
+```
+ffmpeg -hide_banner -loglevel error -y -ss 0.5 -t 3.0 \
+  -i assets/audio/source/purring-cat-mysid.oga \
+  -af "aformat=sample_rates=44100:channel_layouts=mono,loudnorm=I=-18:TP=-6:LRA=7" \
+  -ac 1 -ar 44100 -codec:a libmp3lame -b:a 64k \
+  -fflags +bitexact -flags:a +bitexact -map_metadata -1 -id3v2_version 0 \
+  assets/audio/purr.mp3
+```
+
+先下混单声道再归一化，避免 loudnorm 按立体声限峰后下混又抬高峰值。成品实测 -23.4 LUFS、峰值 -6.1 dBFS：录音峰值高，单遍动态 loudnorm 在 TP=-6 约束下达不到 I=-18。
+
 固定输出 6 个文件：`bgm.mp3`、`purr.mp3`、`meow.mp3`、`meow-long.mp3`、`trill.mp3`、`happy.mp3`。字节预算：
 
 | 文件 | 实测字节 | 上限 |
 | --- | --- | --- |
 | bgm.mp3 | 256416 | 358400（350 KiB） |
-| purr.mp3 | 10030 | 20480（20 KiB） |
+| purr.mp3 | 24449 | 40960（40 KiB） |
 | meow.mp3 | 5014 | 20480 |
 | meow-long.mp3 | 10030 | 20480 |
 | trill.mp3 | 6059 | 20480 |
 | happy.mp3 | 6895 | 20480 |
-| 合计 | 294444 | 512000（500 KiB） |
+| 合计 | 308863 | 512000（500 KiB） |
 
-脚本生成后打印每个文件字节数，超限非 0 退出；找不到 ffmpeg 时打印原因并非 0 退出。`--out <dir>` 可改输出目录，默认 `assets/audio/`。
+脚本生成后打印每个文件字节数，超限非 0 退出；找不到 ffmpeg 或 purr 源文件时打印原因并非 0 退出。`--out <dir>` 可改输出目录，默认 `assets/audio/`，仍会重生成 6 个文件。
 
 ## 失败降级
 
@@ -87,7 +100,9 @@ ffmpeg -hide_banner -loglevel error -y -i <wav> \
 
 ## 来源声明
 
-全部音频由 `tools/make_audio.py` 在仓库内合成，无外部音频素材，无版权素材下载。
+`purr.mp3` 来自 Wikimedia Commons 的真实呼噜录音 `Purring_cat.oga`：作者 Mysid，2007-07-31，Public Domain（作者声明 worldwide public domain，任何用途、无条件）。仓库内保留原始 Ogg（`assets/audio/source/purring-cat-mysid.oga`）与授权/处理说明（`assets/audio/source/README.md`），不参与页面播放。
+
+其余 5 个文件（`bgm.mp3` 与 `meow`、`meow-long`、`trill`、`happy`）全部由 `tools/make_audio.py` 在仓库内合成，无外部音频素材。
 
 ## 重跑与校验
 
@@ -97,6 +112,8 @@ python3 tools/make_audio.py --out /home/sentimentalk/codes/temp/cat-004/audio-re
 sha256sum assets/audio/*.mp3 /home/sentimentalk/codes/temp/cat-004/audio-recheck/*.mp3
 ffprobe -v error -show_entries stream=codec_name,sample_rate,channels \
   -show_entries format=duration,size -of json assets/audio/bgm.mp3
+ffprobe -v error -show_entries stream=codec_name,sample_rate,channels \
+  -show_entries format=duration,size -of json assets/audio/purr.mp3
 ```
 
 headless 测试以 `window.__audio.status()` 为准：`decoded.length === 6`、`ctx === 'running'`、`bgmPlaying` 与设置项同步，不以实际出声为准。截图用例见 `test/e2e/cat-004.test.mjs`。

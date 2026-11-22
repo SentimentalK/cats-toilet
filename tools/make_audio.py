@@ -1,6 +1,5 @@
 import argparse
 import math
-import random
 import struct
 import subprocess
 import wave
@@ -20,7 +19,9 @@ PROGRESSION = [
     (45, [57, 60, 64]),
     (41, [53, 57, 60]),
 ]
-SOUNDS = ['purr', 'meow', 'meow-long', 'trill', 'happy']
+ROOT = Path(__file__).resolve().parent.parent
+SYNTH_SOUNDS = ['meow', 'meow-long', 'trill', 'happy']
+PURR_SOURCE = ROOT / 'assets' / 'audio' / 'source' / 'purring-cat-mysid.oga'
 FFMPEG_ARGS = [
     '-codec:a', 'libmp3lame', '-b:a', '64k', '-ar', str(SR), '-ac', '1',
     '-fflags', '+bitexact', '-flags:a', '+bitexact', '-map_metadata', '-1', '-id3v2_version', '0',
@@ -92,22 +93,6 @@ def render_bgm():
     return buf
 
 
-def render_purr():
-    n = int(round(1.2 * SR))
-    buf = [0.0] * n
-    rng = random.Random(7)
-    carrier = 72.0
-    phase = 0.0
-    for i in range(n):
-        t = i / SR
-        phase += TAU * carrier / SR
-        rumble = math.sin(phase) + 0.55 * math.sin(phase * 2.0) + 0.3 * math.sin(phase * 3.0)
-        mod = 0.55 + 0.45 * math.sin(TAU * 25.0 * t)
-        noise = (rng.random() * 2.0 - 1.0) * 0.12
-        buf[i] = (rumble * mod + noise) * env(t, 1.2) * 0.6
-    return buf
-
-
 def render_meow():
     n = int(round(0.55 * SR))
     buf = [0.0] * n
@@ -145,7 +130,6 @@ def render_happy():
 
 
 RENDERERS = {
-    'purr': render_purr,
     'meow': render_meow,
     'meow-long': render_meow_long,
     'trill': render_trill,
@@ -194,16 +178,38 @@ def encode(wav, mp3):
         raise SystemExit(1)
 
 
+def encode_purr(source, mp3):
+    if not source.is_file():
+        print('purr source missing: %s' % source)
+        print('restore assets/audio/source/purring-cat-mysid.oga; see assets/audio/source/README.md')
+        raise SystemExit(1)
+    cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+           '-ss', '0.5', '-t', '3.0', '-i', str(source),
+           '-af', 'aformat=sample_rates=44100:channel_layouts=mono,loudnorm=I=-18:TP=-6:LRA=7'] + FFMPEG_ARGS + [str(mp3)]
+    try:
+        done = subprocess.run(cmd)
+    except FileNotFoundError:
+        print('ffmpeg not found: install ffmpeg with libmp3lame to build the audio assets')
+        raise SystemExit(1)
+    if done.returncode != 0:
+        print('ffmpeg failed for %s (exit %d)' % (mp3.name, done.returncode))
+        raise SystemExit(1)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--out', default=str(Path(__file__).resolve().parent.parent / 'assets' / 'audio'))
+    parser.add_argument('--out', default=str(ROOT / 'assets' / 'audio'))
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+
+    purr_mp3 = out / 'purr.mp3'
+    encode_purr(PURR_SOURCE, purr_mp3)
+
     tmp = out / '_wav'
     tmp.mkdir(parents=True, exist_ok=True)
 
-    tracks = [('bgm', render_bgm())] + [(name, RENDERERS[name]()) for name in SOUNDS]
+    tracks = [('bgm', render_bgm())] + [(name, RENDERERS[name]()) for name in SYNTH_SOUNDS]
     written = []
     for name, samples in tracks:
         wav = tmp / (name + '.wav')
@@ -213,6 +219,7 @@ def main():
         wav.unlink()
         written.append((name, mp3))
     tmp.rmdir()
+    written.insert(1, ('purr', purr_mp3))
 
     total = 0
     bad = False
@@ -223,6 +230,10 @@ def main():
         if name == 'bgm':
             if size > 358400:
                 print('bgm.mp3 exceeds 350 KiB')
+                bad = True
+        elif name == 'purr':
+            if size > 40960:
+                print('purr.mp3 exceeds 40 KiB')
                 bad = True
         elif size > 20480:
             print('%s.mp3 exceeds 20 KiB' % name)
