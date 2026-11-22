@@ -33,6 +33,17 @@ const ROOT_FILES = new Set(['index.html', 'manifest.webmanifest', 'sw.js']);
 const ROOT_DIRS = new Set(['css', 'js', 'assets']);
 const BLOCKED_PREFIXES = [['assets', 'raw']];
 
+const CODE_CACHE = 'public, max-age=3600, stale-while-revalidate=86400';
+const ASSET_CACHE = 'public, max-age=604800, stale-while-revalidate=86400';
+
+// Cloudflare's zone Browser Cache TTL overrides origin values shorter than its own.
+function cacheControlFor(segs) {
+  const dir = segs.length > 1 ? segs[0] : null;
+  if (dir === 'js' || dir === 'css') return CODE_CACHE;
+  if (dir === 'assets') return ASSET_CACHE;
+  return 'no-cache';
+}
+
 /** Map a raw request path to safe path segments, or null if not servable. */
 export function staticSegments(rawPath) {
   if (rawPath === '/' || rawPath === '') return ['index.html'];
@@ -72,7 +83,7 @@ export function makeStatic(root) {
     const etag = `W/"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`;
     const headers = {
       'Content-Type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': cacheControlFor(segs),
       'ETag': etag,
       'Last-Modified': info.mtime.toUTCString(),
       'X-Content-Type-Options': 'nosniff',

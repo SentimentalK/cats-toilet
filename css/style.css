@@ -1,6 +1,7 @@
 @font-face {
   font-family: "KuaiLe";
-  src: url("../assets/fonts/ZCOOLKuaiLe-Regular.ttf") format("truetype");
+  src: url("../assets/fonts/ZCOOLKuaiLe-Regular.woff2") format("woff2"),
+       url("../assets/fonts/ZCOOLKuaiLe-Regular.ttf") format("truetype");
   font-display: swap;
 }
 @font-face {

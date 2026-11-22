@@ -11,7 +11,7 @@
  */
 'use strict';
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE_PREFIX = 'cats-toilet-';
 const CACHE = CACHE_PREFIX + VERSION;
 const NETWORK_TIMEOUT_MS = 3000;
@@ -31,7 +31,7 @@ const SHELL = [
   'js/account.js',
   'js/plaza.js',
   'manifest.webmanifest',
-  'assets/fonts/ZCOOLKuaiLe-Regular.ttf',
+  'assets/fonts/ZCOOLKuaiLe-Regular.woff2',
   'assets/fonts/Fredoka.ttf',
 ];
 

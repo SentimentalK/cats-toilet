@@ -49,7 +49,9 @@ test('serves the game and its assets with the right types', async (t) => {
 test('never serves server code, design, tools, raw art, dotfiles or traversal', async (t) => {
   const s = await start(t);
   const designFile = readdirSync(`${root}design`, { withFileTypes: true }).find((d) => d.isFile())?.name || 'x';
-  const rawFile = readdirSync(`${root}assets/raw`)[0] || 'x.png';
+  // assets/raw/ is gitignored, so a fresh worktree may not have it.
+  let rawFile = 'x.png';
+  try { rawFile = readdirSync(`${root}assets/raw`)[0] || rawFile; } catch { /* not present */ }
   const blocked = [
     '/server/server.mjs', '/server/app.mjs', '/server/', '/server/data/cats.db',
     `/design/${designFile}`, '/design/', '/tools/', `/assets/raw/${rawFile}`, '/assets/RAW/../raw/x',
@@ -67,6 +69,49 @@ test('never serves server code, design, tools, raw art, dotfiles or traversal', 
   assert.equal(post.status, 405);
   const err = await post.json();
   assert.equal(err.error.code, 'method_not_allowed');
+});
+
+test('cache-control follows the path class and HEAD matches GET', async (t) => {
+  const s = await start(t);
+  const NO_CACHE = 'no-cache';
+  const CODE = 'public, max-age=3600, stale-while-revalidate=86400';
+  const ASSET = 'public, max-age=604800, stale-while-revalidate=86400';
+  const cases = [
+    ['/', NO_CACHE],
+    ['/index.html', NO_CACHE],
+    ['/sw.js', NO_CACHE],
+    ['/manifest.webmanifest', NO_CACHE],
+    ['/js/game.js', CODE],
+    ['/css/style.css', CODE],
+    ['/assets/room-bg.jpg', ASSET],
+    ['/assets/fonts/ZCOOLKuaiLe-Regular.woff2', ASSET],
+  ];
+  for (const [path, expected] of cases) {
+    const get = await fetch(s.base + path);
+    assert.equal(get.status, 200, path);
+    assert.equal(get.headers.get('cache-control'), expected, path);
+    const etag = get.headers.get('etag');
+    assert.ok(etag, `${path} has an ETag`);
+    await get.arrayBuffer();
+
+    const head = await fetch(s.base + path, { method: 'HEAD' });
+    assert.equal(head.status, 200, path);
+    for (const h of ['cache-control', 'content-type', 'etag', 'last-modified', 'content-length']) {
+      assert.equal(head.headers.get(h), get.headers.get(h), `${path} HEAD ${h}`);
+    }
+
+    const cached = await fetch(s.base + path, { headers: { 'if-none-match': etag } });
+    assert.equal(cached.status, 304, path);
+    assert.equal(cached.headers.get('cache-control'), expected, path);
+    assert.equal(await cached.text(), '', path);
+  }
+
+  // Unknown paths keep the existing 404 behaviour (JSON error, no static headers).
+  const missing = await fetch(`${s.base}/js/nope.js`);
+  assert.equal(missing.status, 404);
+  const raw = await s.rawGet('/js/nope.js');
+  assert.equal(raw.status, 404);
+  assert.match(raw.body, /not_found/);
 });
 
 test('service worker shell precaches every script index.html loads', () => {
