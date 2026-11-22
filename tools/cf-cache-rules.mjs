@@ -18,24 +18,30 @@
 const API = 'https://api.cloudflare.com/client/v4';
 const PHASE = 'http_request_cache_settings';
 const PREFIX = 'cats-toilet:';
+// The zone holds several apps (tune, cats, …). Scope every rule to this host so
+// applying the script never changes another app's cache behavior.
+const HOST = process.env.CF_HOST || 'cats.mainstayx.com';
+const HOST_EXPR = `http.host eq "${HOST}"`;
+
+const BYPASS_PATHS = [
+  'starts_with(http.request.uri.path, "/api/")',
+  'http.request.uri.path eq "/sw.js"',
+  'http.request.uri.path eq "/index.html"',
+  'http.request.uri.path eq "/manifest.webmanifest"',
+  'http.request.uri.path eq "/"',
+].join(' or ');
 
 const RULES = [
   {
     description: `${PREFIX} bypass app shell and API`,
-    expression: [
-      'starts_with(http.request.uri.path, "/api/")',
-      'http.request.uri.path eq "/sw.js"',
-      'http.request.uri.path eq "/index.html"',
-      'http.request.uri.path eq "/manifest.webmanifest"',
-      'http.request.uri.path eq "/"',
-    ].join(' or '),
+    expression: `${HOST_EXPR} and (${BYPASS_PATHS})`,
     action: 'set_cache_settings',
     action_parameters: { cache: false },
     enabled: true,
   },
   {
     description: `${PREFIX} static assets`,
-    expression: 'starts_with(http.request.uri.path, "/assets/")',
+    expression: `${HOST_EXPR} and starts_with(http.request.uri.path, "/assets/")`,
     action: 'set_cache_settings',
     action_parameters: {
       cache: true,
@@ -46,7 +52,7 @@ const RULES = [
   },
   {
     description: `${PREFIX} code`,
-    expression: 'starts_with(http.request.uri.path, "/js/") or starts_with(http.request.uri.path, "/css/")',
+    expression: `${HOST_EXPR} and (starts_with(http.request.uri.path, "/js/") or starts_with(http.request.uri.path, "/css/"))`,
     action: 'set_cache_settings',
     action_parameters: {
       cache: true,

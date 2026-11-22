@@ -120,15 +120,17 @@ export CLOUDFLARE_ZONE_ID=...
 node tools/cf-cache-rules.mjs --apply
 ```
 
+**所有表达式都带 `http.host eq "cats.mainstayx.com"`。** 这个 zone 还有 `tune.mainstayx.com`，path-only 规则会误伤它；默认 host 是 `cats.mainstayx.com`，换域名用 `CF_HOST=...`。`server/test/cdn-tools.test.mjs` 会跑 dry-run 断言 host 条件。
+
 规则（phase `http_request_cache_settings`，action `set_cache_settings`）：
 
 | 规则 | 表达式 | 动作 |
 | --- | --- | --- |
-| bypass app shell and API | `/api/` 前缀，或路径等于 `/sw.js`、`/index.html`、`/manifest.webmanifest`、`/` | `cache: false` |
-| static assets | `/assets/` 前缀 | edge 604,800 s、browser 604,800 s |
-| code | `/js/` 或 `/css/` 前缀 | edge 3,600 s、browser 3,600 s |
+| bypass app shell and API | `cats.mainstayx.com` + `/api/` 前缀，或路径等于 `/sw.js`、`/index.html`、`/manifest.webmanifest`、`/` | `cache: false` |
+| static assets | `cats.mainstayx.com` + `/assets/` 前缀 | edge 604,800 s、browser 604,800 s |
+| code | `cats.mainstayx.com` + `/js/` 或 `/css/` 前缀 | edge 3,600 s、browser 3,600 s |
 
-`--apply` 先 `GET /zones/{zone}/rulesets/phases/http_request_cache_settings/entrypoint`：entrypoint 不存在（404）时按 Cloudflare 文档用 `POST /zones/{zone}/rulesets` 建 `kind: zone`、`phase: http_request_cache_settings` 的规则集；已存在时按 `cats-toilet:` description 前缀替换本项目的规则，其他规则保留并排在后面，再 `PUT` 同一 entrypoint。PUT 前会剥掉 GET 返回的只读字段（`id` / `version` / `last_updated` 等），只发 `description`、`expression`、`action`、`action_parameters`、`enabled`。Cloudflare 按顺序匹配，本项目规则放最前，窄路径表达式不会影响其他路径。
+`--apply` 先 `GET /zones/{zone}/rulesets/phases/http_request_cache_settings/entrypoint`：entrypoint 不存在（404）时按 Cloudflare 文档用 `POST /zones/{zone}/rulesets` 建 `kind: zone`、`phase: http_request_cache_settings` 的规则集；已存在时按 `cats-toilet:` description 前缀替换本项目的规则，其他规则保留并排在后面，再 `PUT` 同一 entrypoint。PUT 前会剥掉 GET 返回的只读字段（`id` / `version` / `last_updated` 等），只发 `description`、`expression`、`action`、`action_parameters`、`enabled`。Cloudflare 按顺序匹配，本项目规则放最前；host + 路径双重条件，不会影响同 zone 的其他子域。
 
 token 权限：**Zone:Read** + **Zone:Cache Rules:Edit**；purge 另需 **Zone:Cache Purge**。使用 zone 级 token，不要用 Global API Key。缺 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ZONE_ID` 时 `--apply` 不发送请求，先打印将要 PUT 的完整 payload，再非零退出并标 `未应用 (not applied)`；任何输出都不包含 token。
 
