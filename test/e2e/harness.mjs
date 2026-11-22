@@ -12,11 +12,12 @@ const DEFAULT_SHOT_DIR = '/home/sentimentalk/codes/temp/cat-002/screenshots';
 export async function withGame(t, fn, opts = {}) {
   const port = opts.port ?? Number(process.env.E2E_PORT ?? 8790);
   const cdpPort = opts.cdpPort ?? 9555;
-  const shotDir = process.env.E2E_SHOT_DIR ?? DEFAULT_SHOT_DIR;
+  const runtimeDir = opts.runtimeDir ?? RUNTIME_DIR;
+  const shotDir = opts.shotDir ?? process.env.E2E_SHOT_DIR ?? DEFAULT_SHOT_DIR;
 
-  await mkdir(RUNTIME_DIR, { recursive: true });
+  await mkdir(runtimeDir, { recursive: true });
   await mkdir(shotDir, { recursive: true });
-  const runDir = await mkdtemp(path.join(RUNTIME_DIR, 'run-'));
+  const runDir = await mkdtemp(path.join(runtimeDir, 'run-'));
   const dbPath = path.join(runDir, 'cats.db');
   const userDataDir = path.join(runDir, 'profile');
 
