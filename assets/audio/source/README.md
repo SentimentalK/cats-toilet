@@ -15,7 +15,7 @@
 
 ## 处理命令
 
-截取源文件 0.5–3.5 s，响度归一化，转单声道 44.1 kHz 64 kbps MP3：
+截取源文件 0.5–3.5 s，先下混单声道，再用 loudnorm 归一化（受峰值约束未达 -18 LUFS），转 44.1 kHz 64 kbps MP3：
 
 ```sh
 ffmpeg -hide_banner -loglevel error -y \
