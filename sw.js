@@ -32,7 +32,6 @@ const SHELL = [
   'js/plaza.js',
   'manifest.webmanifest',
   'assets/fonts/ZCOOLKuaiLe-Regular.woff2',
-  'assets/fonts/ZCOOLKuaiLe-Regular.ttf',
   'assets/fonts/Fredoka.ttf',
 ];
 

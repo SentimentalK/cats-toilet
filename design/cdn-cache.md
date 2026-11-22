@@ -14,7 +14,7 @@
 | `/index.html` | `no-cache` | `DYNAMIC` | –（压缩） |
 | `/sw.js` | `max-age=14400` | `REVALIDATED` | 5,366 |
 | `/js/game.js` | `max-age=14400` | `REVALIDATED` | 51,223 |
-| `/css/style.css` | `max-age=14400` | `MISS` | 23,019 |
+| `/css/style.css` | `max-age=14400` | `MISS`（随后 `REVALIDATED`） | 23,019 |
 | `/assets/room-bg.jpg` | `max-age=14400` | `REVALIDATED` | 205,287 |
 | `/assets/fonts/ZCOOLKuaiLe-Regular.ttf` | `max-age=14400` | `REVALIDATED` | 1,514,968 |
 
@@ -49,7 +49,7 @@
 - 代码 / 图片 TTL 短、`stale-while-revalidate` 长：重复访问立即用缓存，后台再校验，不会因为 TTL 到期卡首屏。
 - **失效办法**：Cloudflare 边缘 `purge_everything`（或按 URL purge）+ 浏览器侧靠 `sw.js` 的 `VERSION` 变更。SW 预缓存用 `cache: 'reload'` 绕过 HTTP 缓存，所以发布时 bump `VERSION` 能确保拿到新文件。文件名没有内容哈希，7 天 TTL 意味着不 purge 时旧图最多留 7 天；每次部署都 purge 是本仓库的约定。
 
-`sw.js` 本身进入 `no-cache` 分类；SW `VERSION` 从 `v7` 升到 `v8`，预缓存列表加入 `assets/fonts/ZCOOLKuaiLe-Regular.woff2`（CAT-004 的 6 个音频和水碗图已在列表里）。
+`sw.js` 本身进入 `no-cache` 分类；SW `VERSION` 从 `v7` 升到 `v8`，预缓存列表加入 `assets/fonts/ZCOOLKuaiLe-Regular.woff2`（CAT-004 的 6 个音频和水碗图已在列表里）。1.5 MB 的 TTF 不再预缓存：支持 WOFF2 的浏览器不需要它，需要回退的浏览器会在首次使用时按需取并由 SW 运行时缓存，避免安装阶段白下载 1.5 MB。
 
 ## 3. 字体子集
 
