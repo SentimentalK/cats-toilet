@@ -46,7 +46,8 @@
 
 - 所有 200 仍带强校验用 ETag 与 `Last-Modified`；`If-None-Match` 命中返回 304（304 保留同样的 `Cache-Control`）。
 - HEAD 与 GET 使用同一份头（HEAD 不发 body）。
-- 代码 / 图片 TTL 短、`stale-while-revalidate` 长：重复访问立即用缓存，后台再校验，不会因为 TTL 到期卡首屏。
+- 代码 / 图片 TTL 短、`stale-while-revalidate` 长：未装 SW 的重复访问在 TTL 内直接用浏览器缓存，后台再校验，不会因为 TTL 到期卡首屏。
+- 装了 SW 的页面由 SW 接管：`sw.js:129` 的 network-first 用 `fetch(req, { cache: 'no-cache' })`，页面资源每次仍发条件请求（有 ETag 时是 304），只在 3 秒超时或离线时回缓存。这是本票之前就有的策略，优先级是部署后立刻拿到新版本；本票不改它，边缘命中仍按第 4 节规则生效。需求 2 的“浏览器 TTL 内不发请求”只在未装 SW / 首次访问时严格成立。
 - **失效办法**：Cloudflare 边缘 `purge_everything`（或按 URL purge）+ 浏览器侧靠 `sw.js` 的 `VERSION` 变更。SW 预缓存用 `cache: 'reload'` 绕过 HTTP 缓存，所以发布时 bump `VERSION` 能确保拿到新文件。文件名没有内容哈希，7 天 TTL 意味着不 purge 时旧图最多留 7 天；每次部署都 purge 是本仓库的约定。
 
 `sw.js` 本身进入 `no-cache` 分类；SW `VERSION` 从 `v7` 升到 `v8`，预缓存列表加入 `assets/fonts/ZCOOLKuaiLe-Regular.woff2`（CAT-004 的 6 个音频和水碗图已在列表里）。1.5 MB 的 TTF 不再预缓存：支持 WOFF2 的浏览器不需要它，需要回退的浏览器会在首次使用时按需取并由 SW 运行时缓存，避免安装阶段白下载 1.5 MB。
@@ -64,6 +65,7 @@
   - `/home/sentimentalk/codes/temp/cat-005/screenshots/after-desktop-1280x800.png`
   - `/home/sentimentalk/codes/temp/cat-005/screenshots/after-mobile-390x844.png`
   - 标题 `俺家的猫厕所` 前后宽度同为 109.45 px；无缺字方块；页面资源从 `ZCOOLKuaiLe-Regular.ttf`（1,515,268 B 传输）变为 `.woff2`（51,160 B 传输）。
+  - 仓库内可复查：`python3 tools/subset-font.py` 重建出同一文件，SHA-256 `3bb03aebd132fa7e66b3fd61de1efe4cf9daaae363fe434290ae03696c229614`；扫描 575 个字符，其中 553 个在源字体、22 个（emoji 与 `←↑→↓★☆` 等）按上述回退。浏览器实测只请求 WOFF2，`document.fonts.check('16px KuaiLe', '俺家的猫厕所')` 为 true。
 
 ## 4. Cloudflare Cache Rules
 
@@ -93,7 +95,7 @@ node tools/cf-cache-rules.mjs --apply
 
 token 权限：**Zone:Read** + **Zone:Cache Rules:Edit**；purge 另需 **Zone:Cache Purge**。使用 zone 级 token，不要用 Global API Key。缺 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ZONE_ID` 时 `--apply` 直接非零退出，不发送请求、不打印 token。
 
-> Free / Pro 的 Edge Cache TTL 下限是 2 小时（7,200 s）。免费版上 `code` 规则的 3,600 s 可能被拒绝或被抬到 7,200 s；按本票取 3,600 s，若 API 报 TTL 下限错误，把该规则改成 7,200 s 再 apply。
+> Edge Cache TTL 下限：Free 2 小时（7,200 s），Pro 1 小时（3,600 s）。免费版上 `code` 规则的 3,600 s 可能被拒绝或被抬到 7,200 s；按本票取 3,600 s，若 API 报 TTL 下限错误，把该规则改成 7,200 s 再 apply。
 
 ### 4.2 用 Dashboard
 
