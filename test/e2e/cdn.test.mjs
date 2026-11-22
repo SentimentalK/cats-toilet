@@ -20,10 +20,14 @@ test('CAT-005 — second load serves js/css from the SW cache', { timeout: 120_0
 
       for (const path of ['/js/game.js', '/css/style.css']) {
         const rows = page.network.filter((r) => r.url === base + path);
-        assert.equal(rows.length, 1, `${path} response count: ${JSON.stringify(rows)}`);
-        assert.equal(rows[0].status, 200, `${path} status`);
-        assert.equal(rows[0].fromServiceWorker, true, `${path} served by SW`);
-        assert.equal(rows[0].headers['x-sw-cache'], 'hit', `${path} cache-first hit`);
+        // a cloud-save adoption may reload the document, so the path can be
+        // requested more than once; every response must still be a cache hit
+        assert.ok(rows.length >= 1, `${path} was never requested`);
+        for (const row of rows) {
+          assert.equal(row.status, 200, `${path} status`);
+          assert.equal(row.fromServiceWorker, true, `${path} served by SW`);
+          assert.equal(row.headers['x-sw-cache'], 'hit', `${path} cache-first hit`);
+        }
       }
     },
     {

@@ -1,9 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const AUDIO = require('../../js/audio.js');
+const AUDIO_DIR = fileURLToPath(new URL('../../assets/audio/', import.meta.url));
 
 const DEFAULTS = { musicOn: true, sfxOn: true, musicVol: 0.4, sfxVol: 0.7 };
 
@@ -23,6 +26,22 @@ function memStorage(initial) {
 test('音效 id 固定为五个', () => {
   assert.deepEqual(AUDIO.SOUND_IDS, ['purr', 'meow', 'meow-long', 'trill', 'happy']);
   assert.equal(AUDIO.SOUND_IDS.length, 5);
+});
+
+test('五个猫叫资产齐备且不超字节预算', () => {
+  let sfx = 0;
+  for (const id of AUDIO.SOUND_IDS) {
+    const path = `${AUDIO_DIR}${id}.mp3`;
+    const size = statSync(path).size;
+    const head = readFileSync(path).subarray(0, 2);
+    // -id3v2_version 0 writes no tag, so the file starts on an MPEG frame sync
+    assert.equal(head[0], 0xff, `${id}.mp3 has no MPEG frame sync`);
+    assert.equal(head[1] & 0xe0, 0xe0, `${id}.mp3 has no MPEG frame sync`);
+    assert.ok(size > 2048, `${id}.mp3 is only ${size} B`);
+    assert.ok(size <= (id === 'purr' ? 40960 : 20480), `${id}.mp3 is ${size} B`);
+    sfx += size;
+  }
+  assert.ok(sfx <= 102400, `cat sounds total ${sfx} B`);
 });
 
 test('normalizeSettings 补全并夹紧音量', () => {

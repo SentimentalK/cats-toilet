@@ -20,8 +20,18 @@ PROGRESSION = [
     (41, [53, 57, 60]),
 ]
 ROOT = Path(__file__).resolve().parent.parent
-SYNTH_SOUNDS = ['meow', 'meow-long', 'trill', 'happy']
-PURR_SOURCE = ROOT / 'assets' / 'audio' / 'source' / 'purring-cat-mysid.oga'
+SOURCE_DIR = ROOT / 'assets' / 'audio' / 'source'
+# Cat sounds are trimmed from CC0 / public-domain recordings in assets/audio/source/; only the BGM is synthesised.
+REAL_SOUNDS = [
+    {'id': 'purr', 'file': 'purring-cat-mysid.oga', 'ss': '0.5', 't': '3.0', 'credit': 'Mysid, Public Domain'},
+    {'id': 'meow', 'file': 'meow-short-tsester.flac', 'ss': '0.212', 't': '0.663', 'credit': 'Tsester, CC0'},
+    {'id': 'meow-long', 'file': 'meow-long-heismark.oga', 'ss': '9.40', 't': '1.97', 'credit': 'Heismark, Public Domain'},
+    {'id': 'trill', 'file': 'trill-jsbarrett.mp3', 'ss': '3.48', 't': '0.70', 'credit': 'jsbarrett, CC0'},
+    {'id': 'happy', 'file': 'meow-happy-miquilena.ogg', 'ss': '0', 't': '1.174', 'credit': 'George Miquilena, CC0'},
+]
+SFX_BYTES_MAX = 20480
+PURR_BYTES_MAX = 40960
+SFX_TOTAL_MAX = 102400
 FFMPEG_ARGS = [
     '-codec:a', 'libmp3lame', '-b:a', '64k', '-ar', str(SR), '-ac', '1',
     '-fflags', '+bitexact', '-flags:a', '+bitexact', '-map_metadata', '-1', '-id3v2_version', '0',
@@ -56,25 +66,6 @@ def add_tone(buf, start, dur, freq, amp, harmonics):
         buf[idx] += sample * amp * env(t, dur)
 
 
-def add_glide(buf, start, dur, f0, f1, amp, harmonics, shape='sine'):
-    first = int(round(start * SR))
-    count = int(round(dur * SR))
-    phase = 0.0
-    for i in range(count):
-        idx = first + i
-        if idx < 0 or idx >= len(buf):
-            continue
-        t = i / SR
-        freq = f0 + (f1 - f0) * (t / dur)
-        phase += TAU * freq / SR
-        sample = 0.0
-        for h, weight in enumerate(harmonics, 1):
-            sample += weight * math.sin(phase * h)
-        if shape == 'tri':
-            sample += 0.25 * math.sin(phase * 3.0) / 9.0
-        buf[idx] += sample * amp * env(t, dur)
-
-
 def render_bgm():
     n = int(round(BGM_LEN * SR))
     buf = [0.0] * n
@@ -91,50 +82,6 @@ def render_bgm():
             note = chord[pattern[step]] + 12
             add_tone(buf, t0 + step * BEAT, 0.44, hz(note), 0.17, [1.0, 0.35, 0.12])
     return buf
-
-
-def render_meow():
-    n = int(round(0.55 * SR))
-    buf = [0.0] * n
-    add_glide(buf, 0.0, 0.55, 700.0, 450.0, 0.6, [1.0, 0.35, 0.15])
-    return buf
-
-
-def render_meow_long():
-    n = int(round(1.2 * SR))
-    buf = [0.0] * n
-    add_glide(buf, 0.0, 0.45, 620.0, 380.0, 0.6, [1.0, 0.35, 0.18])
-    add_glide(buf, 0.45, 0.75, 380.0, 480.0, 0.5, [1.0, 0.3, 0.14])
-    return buf
-
-
-def render_trill():
-    n = int(round(0.7 * SR))
-    buf = [0.0] * n
-    phase = 0.0
-    for i in range(n):
-        t = i / SR
-        phase += TAU * 520.0 / SR
-        sample = math.sin(phase) + 0.4 * math.sin(phase * 2.0) + 0.15 * math.sin(phase * 3.0)
-        tremolo = 0.5 + 0.5 * math.sin(TAU * 18.0 * t)
-        buf[i] = sample * tremolo * env(t, 0.7) * 0.6
-    return buf
-
-
-def render_happy():
-    n = int(round(0.8 * SR))
-    buf = [0.0] * n
-    add_glide(buf, 0.0, 0.38, 600.0, 760.0, 0.55, [1.0, 0.3, 0.12])
-    add_glide(buf, 0.38, 0.42, 700.0, 900.0, 0.5, [1.0, 0.3, 0.12])
-    return buf
-
-
-RENDERERS = {
-    'meow': render_meow,
-    'meow-long': render_meow_long,
-    'trill': render_trill,
-    'happy': render_happy,
-}
 
 
 def finalize(samples):
@@ -178,14 +125,17 @@ def encode(wav, mp3):
         raise SystemExit(1)
 
 
-def encode_purr(source, mp3):
+def encode_real(sound, mp3):
+    """A missing source must fail, never fall back to synthesis."""
+    source = SOURCE_DIR / sound['file']
     if not source.is_file():
-        print('purr source missing: %s' % source)
-        print('restore assets/audio/source/purring-cat-mysid.oga; see assets/audio/source/README.md')
+        print('%s source missing: %s (%s)' % (sound['id'], source, sound['credit']))
+        print('restore it from the URL in assets/audio/source/README.md; no synthetic fallback')
         raise SystemExit(1)
     cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
-           '-ss', '0.5', '-t', '3.0', '-i', str(source),
-           '-af', 'aformat=sample_rates=44100:channel_layouts=mono,loudnorm=I=-18:TP=-6:LRA=7'] + FFMPEG_ARGS + [str(mp3)]
+           '-ss', sound['ss'], '-t', sound['t'], '-i', str(source),
+           '-af', 'aformat=sample_rates=44100:channel_layouts=mono,loudnorm=I=-18:TP=-6:LRA=7'] + \
+          FFMPEG_ARGS + [str(mp3)]
     try:
         done = subprocess.run(cmd)
     except FileNotFoundError:
@@ -203,42 +153,48 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    purr_mp3 = out / 'purr.mp3'
-    encode_purr(PURR_SOURCE, purr_mp3)
-
     tmp = out / '_wav'
     tmp.mkdir(parents=True, exist_ok=True)
-
-    tracks = [('bgm', render_bgm())] + [(name, RENDERERS[name]()) for name in SYNTH_SOUNDS]
-    written = []
-    for name, samples in tracks:
-        wav = tmp / (name + '.wav')
-        mp3 = out / (name + '.mp3')
-        write_wav(wav, finalize(samples))
-        encode(wav, mp3)
-        wav.unlink()
-        written.append((name, mp3))
+    bgm = out / 'bgm.mp3'
+    wav = tmp / 'bgm.wav'
+    write_wav(wav, finalize(render_bgm()))
+    encode(wav, bgm)
+    wav.unlink()
     tmp.rmdir()
-    written.insert(1, ('purr', purr_mp3))
+
+    written = [('bgm', bgm)]
+    for sound in REAL_SOUNDS:
+        mp3 = out / (sound['id'] + '.mp3')
+        encode_real(sound, mp3)
+        written.append((sound['id'], mp3))
 
     total = 0
+    sfx_total = 0
     bad = False
     for name, path in written:
         size = path.stat().st_size
         total += size
-        print('%s.mp3 %d bytes' % (name, size))
+        extra = ''
         if name == 'bgm':
             if size > 358400:
                 print('bgm.mp3 exceeds 350 KiB')
                 bad = True
-        elif name == 'purr':
-            if size > 40960:
-                print('purr.mp3 exceeds 40 KiB')
+        else:
+            sfx_total += size
+            if name == 'purr':
+                if size > PURR_BYTES_MAX:
+                    print('purr.mp3 exceeds 40 KiB')
+                    bad = True
+            elif size > SFX_BYTES_MAX:
+                print('%s.mp3 exceeds 20 KiB' % name)
                 bad = True
-        elif size > 20480:
-            print('%s.mp3 exceeds 20 KiB' % name)
-            bad = True
+            extra = '  ' + next(s['credit'] for s in REAL_SOUNDS if s['id'] == name)
+        print('%s.mp3 %d bytes%s' % (name, size, extra))
+    print('cat sounds %d bytes (max %d)' % (sfx_total, SFX_TOTAL_MAX))
     print('total %d bytes' % total)
+    if sfx_total > SFX_TOTAL_MAX:
+        print('cat sounds exceed 100 KiB')
+        bad = True
     if total > 512000:
         print('audio total exceeds 500 KiB')
         bad = True
