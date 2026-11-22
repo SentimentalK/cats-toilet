@@ -1,0 +1,148 @@
+# 静态资源缓存与 Cloudflare 配置（CAT-005）
+
+- 日期：2026-11-22
+- 目标：中国用户重复访问走浏览器 / 边缘缓存，首屏少下载；`sw.js` 不再被缓存 4 小时；中文标题字体从 1.5 MB 降到几十 KB。
+- 状态：**origin 与工具已就绪；线上 Cloudflare 未应用**。本机没有 API token，本票不部署、不改 DNS。
+
+## 1. 2026-11-22 线上实测
+
+`curl -sSI https://cats.mainstayx.com<path>` 的响应头（同日多次）：
+
+| 路径 | cache-control | cf-cache-status | content-length |
+| --- | --- | --- | --- |
+| `/` | `no-cache` | `DYNAMIC` | –（压缩） |
+| `/index.html` | `no-cache` | `DYNAMIC` | –（压缩） |
+| `/sw.js` | `max-age=14400` | `REVALIDATED` | 5,366 |
+| `/js/game.js` | `max-age=14400` | `REVALIDATED` | 51,223 |
+| `/css/style.css` | `max-age=14400` | `MISS` | 23,019 |
+| `/assets/room-bg.jpg` | `max-age=14400` | `REVALIDATED` | 205,287 |
+| `/assets/fonts/ZCOOLKuaiLe-Regular.ttf` | `max-age=14400` | `REVALIDATED` | 1,514,968 |
+
+三个结论：
+
+1. Service Worker 被浏览器缓存 4 小时，部署后旧 SW 最长会留 4 小时。
+2. 边缘没有 HIT：`REVALIDATED` 表示 Cloudflare 每次都拿 ETag 回源校验；重复访问仍吃满 RTT（大陆到 HK/LAX/SIN 通常 150–300 ms）。
+3. 中文标题字体 1.5 MB 是首屏最大单文件。
+
+### 4 小时从哪来
+
+线上 origin 当时对 `js/`、`css/`、`assets/` 也发 `Cache-Control: no-cache`（CAT-005 之前的 `server/static.mjs`）。响应里的 `max-age=14400` 是 Cloudflare zone 的 **Browser Cache TTL** 默认值 4 小时改写出来的：
+
+> Browser Cache TTL … By default, Cloudflare honors the cache expiration set in your `Expires` and `Cache-Control` headers but overrides those headers if: the value … is less than the Browser Cache TTL Cloudflare setting.
+> — [Edge and Browser Cache TTL](https://developers.cloudflare.com/cache/how-to/edge-browser-cache-ttl/)
+
+所以只改 origin 不够：Cloudflare 里必须把 Browser Cache TTL 改成 **Respect Existing Headers**（或让 Cache Rule 显式设置 browser TTL），否则 `sw.js` 的 `no-cache` 还是会被抬到 4 小时。`REVALIDATED` 则来自 zone 的边缘缓存策略，用本文第 4 节的规则修复。
+
+## 2. origin 策略（`server/static.mjs`）
+
+按解析后的路径分类，不再一刀切 `no-cache`：
+
+| 路径 | Cache-Control |
+| --- | --- |
+| `/`、`/index.html`、`/sw.js`、`/manifest.webmanifest` | `no-cache` |
+| `/js/**`、`/css/**` | `public, max-age=3600, stale-while-revalidate=86400` |
+| `/assets/**` | `public, max-age=604800, stale-while-revalidate=86400` |
+| 其他（404 等） | 维持原有行为 |
+
+- 所有 200 仍带强校验用 ETag 与 `Last-Modified`；`If-None-Match` 命中返回 304（304 保留同样的 `Cache-Control`）。
+- HEAD 与 GET 使用同一份头（HEAD 不发 body）。
+- 代码 / 图片 TTL 短、`stale-while-revalidate` 长：重复访问立即用缓存，后台再校验，不会因为 TTL 到期卡首屏。
+- **失效办法**：Cloudflare 边缘 `purge_everything`（或按 URL purge）+ 浏览器侧靠 `sw.js` 的 `VERSION` 变更。SW 预缓存用 `cache: 'reload'` 绕过 HTTP 缓存，所以发布时 bump `VERSION` 能确保拿到新文件。文件名没有内容哈希，7 天 TTL 意味着不 purge 时旧图最多留 7 天；每次部署都 purge 是本仓库的约定。
+
+`sw.js` 本身进入 `no-cache` 分类；SW `VERSION` 从 `v7` 升到 `v8`，预缓存列表加入 `assets/fonts/ZCOOLKuaiLe-Regular.woff2`（CAT-004 的 6 个音频和水碗图已在列表里）。
+
+## 3. 字体子集
+
+- 工具：`python3 tools/subset-font.py`；扫描 `index.html`、`js/*.js`、`css/*.css`，加 ASCII 可打印字符与常用中文标点，调用 `fontTools.subset`（即 `pyftsubset`）：
+  `--flavor=woff2 --layout-features='*' --no-hinting`。
+- 结果：`ZCOOLKuaiLe-Regular.ttf` 1,514,968 B → `ZCOOLKuaiLe-Regular.woff2` **50,860 B**（49.7 KB，97% 降幅），575 个字符。
+- 源字体没有的字形（emoji、`←↑→↓★☆` 等）由系统字体回退，不阻塞构建；脚本会打印清单。
+- `css/style.css` 的 `@font-face` 先 WOFF2 后 TTF；TTF 与 OFL 授权文件保留，供不支持 WOFF2 的浏览器回退。
+- 截图对比（改动前后、桌面 1280×800、手机 390×844）：
+  - `/home/sentimentalk/codes/temp/cat-005/screenshots/before-desktop-1280x800.png`
+  - `/home/sentimentalk/codes/temp/cat-005/screenshots/before-mobile-390x844.png`
+  - `/home/sentimentalk/codes/temp/cat-005/screenshots/after-desktop-1280x800.png`
+  - `/home/sentimentalk/codes/temp/cat-005/screenshots/after-mobile-390x844.png`
+  - 标题 `俺家的猫厕所` 前后宽度同为 109.45 px；无缺字方块；页面资源从 `ZCOOLKuaiLe-Regular.ttf`（1,515,268 B 传输）变为 `.woff2`（51,160 B 传输）。
+
+## 4. Cloudflare Cache Rules
+
+### 4.1 用脚本（推荐，可 Review）
+
+`tools/cf-cache-rules.mjs` 零依赖，读环境变量，不读写仓库：
+
+```sh
+# 只看将 PUT 的 JSON，不联网
+node tools/cf-cache-rules.mjs --dry-run
+
+# 应用（需要 token + zone id）
+export CLOUDFLARE_API_TOKEN=...   # 不要 commit、不要贴进日志
+export CLOUDFLARE_ZONE_ID=...
+node tools/cf-cache-rules.mjs --apply
+```
+
+规则（phase `http_request_cache_settings`，action `set_cache_settings`）：
+
+| 规则 | 表达式 | 动作 |
+| --- | --- | --- |
+| bypass app shell and API | `/api/` 前缀，或路径等于 `/sw.js`、`/index.html`、`/manifest.webmanifest`、`/` | `cache: false` |
+| static assets | `/assets/` 前缀 | edge 604,800 s、browser 604,800 s |
+| code | `/js/` 或 `/css/` 前缀 | edge 3,600 s、browser 3,600 s |
+
+`--apply` 先 `GET /zones/{zone}/rulesets/phases/http_request_cache_settings/entrypoint`，按 `cats-toilet:` description 前缀替换本项目的规则，其他规则原样保留并排在后面；随后 `PUT` 同一 entrypoint。Cloudflare 按顺序匹配，本项目规则放最前，窄路径表达式不会影响其他路径。
+
+token 权限：**Zone:Read** + **Zone:Cache Rules:Edit**；purge 另需 **Zone:Cache Purge**。使用 zone 级 token，不要用 Global API Key。缺 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ZONE_ID` 时 `--apply` 直接非零退出，不发送请求、不打印 token。
+
+### 4.2 用 Dashboard
+
+1. 选中 `mainstayx.com` zone → **Caching → Cache Rules**。
+2. 按上表建三条规则；Expression 用 `starts_with(http.request.uri.path, "/assets/")` 等。
+3. **Caching → Configuration → Browser Cache TTL** 改成 **Respect Existing Headers**（关键，见第 1 节）。
+4. 若 zone 之前有 Page Rules 或旧 Cache Rules 对 `/js/`、`/assets/` 设过 Edge/Browser TTL，删除或让其排在本项目规则之后。
+5. 保存后按第 5 节验证。
+
+### 4.3 部署后 purge
+
+```sh
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  -H "content-type: application/json" --data '{"purge_everything":true}'
+```
+
+purge 只清边缘；浏览器里已存的旧资源靠 `sw.js` 的 `VERSION` + `cache: 'reload'` 更新。`wrangler` 不管 zone cache rules（它只管 Workers/Pages/KV/R2），所以本仓库用 REST 脚本。
+
+## 5. 审计
+
+```sh
+# 线上只读巡检
+node tools/cdn-audit.mjs --base https://cats.mainstayx.com
+
+# 本地 origin 头断言（自己先起服务）
+node server/server.mjs --port 8790 --db /tmp/cats.db &
+node tools/cdn-audit.mjs --base http://127.0.0.1:8790 --assert-origin
+```
+
+每个路径请求两次，打印 `status`、`cache-control`、`content-length`、`cf-cache-status`。`--assert-origin` 只断言 origin 的 `Cache-Control`；线上 `REVALIDATED`/`DYNAMIC`/`MISS` 只作为提示，不当成本地失败。
+
+配置好规则后的预期：
+
+- `/`、`/index.html`、`/sw.js`、`/manifest.webmanifest`：`cf-cache-status: DYNAMIC`（bypass），`cache-control: no-cache`。
+- `/js/`、`/css/`、`/assets/`：第二次请求 `cf-cache-status: HIT`，浏览器在 TTL 内不再发请求。
+
+## 6. 免费版做不到什么
+
+- Cloudflare 免费 / Pro 在中国大陆**没有自有节点**。大陆流量通常落到香港、洛杉矶、新加坡等，首访 RTT 仍然高；缓存只省重复下载，不省首访 RTT。
+- 真正的大陆加速需要：
+  - Cloudflare **China Network**：Enterprise 合同 + ICP 备案 + 域名接入；或
+  - 阿里云 / 腾讯云 CDN：需要大陆账号与 ICP 备案，并把源站暴露给该 CDN。
+- 本票不注册 CDN、不备案、不买 Enterprise/Argo，也不改 DNS。免费版能做的只有：正确缓存头 + Cache Rules + 字体子集 + 首次加载体积下降。
+
+## 7. 用户下一步
+
+1. 合并并部署本 SHA 后，先跑 `node tools/cdn-audit.mjs --base https://cats.mainstayx.com` 确认 origin 头已变。
+2. 在 Cloudflare 把 **Browser Cache TTL** 改为 Respect Existing Headers。
+3. 创建 Zone:Read + Zone:Cache Rules:Edit 的 token，和 zone id 一起放进本机环境变量，运行 `node tools/cf-cache-rules.mjs --apply`；或按 4.2 手动建三条规则。
+4. `purge_everything`，再跑审计确认 `HIT`。
+5. 若目标是大陆首访速度，评估 China Network 或国内 CDN（需备案），这超出本仓库能自动完成的范围。
+
+没有 token 时本文不声称规则已生效；上述第 2–4 步需要用户执行。
