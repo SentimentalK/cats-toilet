@@ -138,3 +138,36 @@ test('BGM 在 fade 窗口内关再开仍会重新播放', async () => {
   assert.equal(engine.status().bgmPlaying, true);
   assert.equal(fake.started.length, 2);
 });
+
+test('首次点击早于解锁时，待播的猫叫在解码完成后补播一次', async () => {
+  const fake = fakeAudioContext();
+  const fetchFn = () => Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) });
+  const engine = AUDIO.createEngine({
+    AudioContext: function () { return fake.ctx; },
+    fetch: fetchFn,
+    baseUrl: './assets/audio/',
+  });
+
+  assert.equal(engine.playCat(), null);
+  assert.equal(engine.status().sfxCount, 0);
+
+  await engine.unlock();
+  assert.equal(engine.status().sfxCount, 1);
+  assert.ok(AUDIO.SOUND_IDS.includes(engine.status().lastSfx));
+});
+
+test('解锁后音频上下文仍未运行时，待播请求静默丢弃', async () => {
+  const fake = fakeAudioContext('suspended');
+  const fetchFn = () => Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) });
+  const engine = AUDIO.createEngine({
+    AudioContext: function () { return fake.ctx; },
+    fetch: fetchFn,
+    baseUrl: './assets/audio/',
+  });
+
+  assert.equal(engine.playCat(), null);
+  await engine.unlock();
+  assert.equal(engine.status().ctx, 'suspended');
+  assert.equal(engine.status().sfxCount, 0);
+  assert.equal(engine.status().lastSfx, null);
+});

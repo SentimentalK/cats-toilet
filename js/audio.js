@@ -82,6 +82,7 @@
     var bgmPlaying = false;
     var lastSfx = null;
     var sfxCount = 0;
+    var pendingCat = false;
     var unlockPromise = null;
 
     function fail(id) {
@@ -172,11 +173,15 @@
     function unlock() {
       if (unlockPromise) return unlockPromise;
       unlockPromise = Promise.resolve().then(function () {
-        if (!AudioCtor) return;
+        if (!AudioCtor) {
+          pendingCat = false;
+          return;
+        }
         try {
           ctx = new AudioCtor();
         } catch (_) {
           ctx = null;
+          pendingCat = false;
           FILE_IDS.forEach(fail);
           return;
         }
@@ -187,34 +192,62 @@
         try {
           makeGains();
         } catch (_) {
+          pendingCat = false;
           FILE_IDS.forEach(fail);
           return;
         }
         return Promise.all(FILE_IDS.map(loadOne)).then(function () {
           if (settings.musicOn) startBgm();
+          flushPendingCat();
         });
       });
       return unlockPromise;
     }
 
+    function readySfx() {
+      return SOUND_IDS.filter(function (id) { return !!buffers[id]; });
+    }
+
+    function startCat() {
+      var ready = readySfx();
+      if (!ready.length) return null;
+      var id = pickSound(lastSfx);
+      if (ready.indexOf(id) < 0) {
+        var other = ready.filter(function (x) { return x !== lastSfx; });
+        var pool = other.length ? other : ready;
+        id = pool[Math.floor(Math.random() * pool.length)];
+      }
+      var src = ctx.createBufferSource();
+      src.buffer = buffers[id];
+      src.connect(sfxGain);
+      src.start();
+      lastSfx = id;
+      sfxCount++;
+      return id;
+    }
+
     function playCat() {
       try {
-        if (!ctx || ctxState() !== 'running' || settings.sfxOn !== true) return null;
-        var ready = SOUND_IDS.filter(function (id) { return !!buffers[id]; });
-        if (!ready.length) return null;
-        var id = pickSound(lastSfx);
-        if (ready.indexOf(id) < 0) {
-          var other = ready.filter(function (x) { return x !== lastSfx; });
-          var pool = other.length ? other : ready;
-          id = pool[Math.floor(Math.random() * pool.length)];
+        if (settings.sfxOn !== true) return null;
+        if (!ctx || ctxState() !== 'running' || !readySfx().length) {
+          pendingCat = true;
+          return null;
         }
-        var src = ctx.createBufferSource();
-        src.buffer = buffers[id];
-        src.connect(sfxGain);
-        src.start();
-        lastSfx = id;
-        sfxCount++;
-        return id;
+        pendingCat = false;
+        return startCat();
+      } catch (_) {
+        pendingCat = false;
+        fail('sfx');
+        return null;
+      }
+    }
+
+    function flushPendingCat() {
+      if (!pendingCat) return null;
+      pendingCat = false;
+      if (settings.sfxOn !== true || !ctx || ctxState() !== 'running' || !readySfx().length) return null;
+      try {
+        return startCat();
       } catch (_) {
         fail('sfx');
         return null;
