@@ -10,6 +10,7 @@ import {
   TOKEN_KEY,
   closeShop,
   freshSave,
+  isVisible,
   makeUser,
   openShop,
   poopTotal,
@@ -221,6 +222,29 @@ test('CAT-004 需求 3 — 5 种猫叫不连续重复 + 唤醒叫', { timeout: 1
       await page.shot(`${shotDir}/req-03-meows.png`);
     },
     opts(async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ starterBonus: 0, boxes: [{ level: 0, poops: [] }] }), guard: guard('req3') })),
+  );
+});
+
+test('CAT-004 需求 3 补修 — 首击即点猫也有叫声', { timeout: 120_000 }, async (t) => {
+  await withGame(
+    t,
+    async ({ page, shotDir }) => {
+      await ready(page);
+      assert.equal(await isVisible(page, SEL.onboarding), false);
+      assert.equal(await page.evaluate('window.__audio.status().sfxCount'), 0);
+
+      await page.click(SEL.cat);
+      await page.waitFor("window.__audio.status().ctx === 'running' && window.__audio.status().decoded.length === 6", 15_000);
+      await page.waitFor('window.__audio.status().sfxCount === 1', 5000);
+      const last = await page.evaluate('window.__audio.status().lastSfx');
+      assert.ok(['purr', 'meow', 'meow-long', 'trill', 'happy'].includes(last), `lastSfx ${last}`);
+      await page.shot(`${shotDir}/req-03-first-tap-cat.png`);
+    },
+    opts(async ({ base }) => seedScript({
+      token: (await makeUser(base)).token,
+      save: freshSave({ tutorial: { done: true }, starterBonus: 0, boxes: [{ level: 0, poops: [] }] }),
+      guard: guard('req3b'),
+    })),
   );
 });
 

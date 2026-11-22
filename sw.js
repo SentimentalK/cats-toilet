@@ -11,7 +11,7 @@
  */
 'use strict';
 
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE_PREFIX = 'cats-toilet-';
 const CACHE = CACHE_PREFIX + VERSION;
 const NETWORK_TIMEOUT_MS = 3000;
