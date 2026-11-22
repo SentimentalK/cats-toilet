@@ -37,6 +37,8 @@
 | MAX_BOXES | 3 | 一个房间最多三个盆 |
 | FRESHENER_BONUS | 5 | 有除臭机时每坨多 5 分 |
 | FOOD_CAP | 3 | 饭盆一次最多装 3 份 |
+| STARTER_BONUS | 70 | 新存档第一次成功铲出（单坨或一键）的一次性新手礼 |
+| START_POOP_COUNT | 3 | 新存档开局盆里已有的坨数 |
 
 两个需要单独解释的取值：
 
@@ -90,16 +92,17 @@ factors.food  = food  <= 0 ? EMPTY_FACTOR : food  >= FOOD_LOW  ? 1
 ```
 每坨积分 = BOX_LEVELS[该盆等级].value + (owned.freshener ? 5 : 0)
          = 10 + 5 × 该盆等级 + 除臭机 5
-总积分   = 铲出的坨数 × 每坨积分
+总积分   = 铲出的坨数 × 每坨积分 + 首次铲出的新手礼
+新手礼   = 第一次成功铲出（单坨或一键）时一次性加 STARTER_BONUS = 70，之后为 0
 ```
 
-积分按铲出时该盆的等级结算，升级盆只影响之后铲出的坨。除臭机是全局加成，每坨多 5 分。
+积分按铲出时该盆的等级结算，升级盆只影响之后铲出的坨。除臭机是全局加成，每坨多 5 分。新手礼不是便便，也不计入便便价值：开局 3 坨 × 10 + 70 = 100 分，单坨首铲是 10 + 70 = 80 分，第二次铲同一档位只剩 10 分。一键铲空只在真的铲出坨数时发放，空盆点「铲屎」返回 0 且不发新手礼。
 
 ## 开局状态
 
-新玩家：积分 0、水满（1）、饭盆满（1 份，即一份初级猫粮）、心情中性（50）、一个 0 级盆、没有猫。
+新玩家：积分 0、水满（1）、饭盆满（1 份，即一份初级猫粮）、心情中性（50）、一个 0 级盆里已有 `START_POOP_COUNT = 3` 坨、`starterBonus = 70`、没有猫。
 
-这个开局够自给：一份猫粮 3 小时吃完，0 级单盆容量 3，3 小时内最多 3 坨（容量封顶）= 30 分，够买 3 份初级猫粮（每份 10 分）。单盆时靠容量而不是产量说话，新玩家在粮见底前回来铲一次，就能覆盖猫粮开销，不会陷入"没粮 → 不产出 → 没分买粮"的死锁。水是免费的，补一次就满。
+开局附赠的 3 坨和一键铲空的 70 分新手礼让第一分钟就有反馈：3 坨 × 10 + 70 = 100 分，够买 10 份初级猫粮。之后仍靠正常产出与铲屎循环：一份猫粮 3 小时吃完，0 级单盆容量 3，3 小时内最多 3 坨（容量封顶）= 30 分，够买 3 份初级猫粮（每份 10 分）。单盆时靠容量而不是产量说话，新玩家在粮见底前回来铲一次，就能覆盖猫粮开销，不会陷入"没粮 → 不产出 → 没分买粮"的死锁。水是免费的，补一次就满。
 
 ## 一次购买得到什么
 
@@ -130,7 +133,7 @@ isSquatting = hasSpace(state) && (nextPoopInMs(state, at) <= SQUAT_LEAD_MS
 v2 状态：
 
 ```
-{ v: 2, level, points, totalScooped, seq, cat, owned, walls, wall,
+{ v: 2, level, points, totalScooped, seq, starterBonus, cat, owned, walls, wall,
   boxes: [{ level, poops: [{ id, kind }] }],
   water, food,
   mood: { petAt, playAt, treatAt, treatBoost, playBoost?, playMs? },
@@ -140,7 +143,7 @@ v2 状态：
 
 顶层 `level` 是各盆等级的最大值，由 `syncLevel` 维护；`buyBox`、`upgradeBox`、`migrate` 末尾都会重算。服务端 `GET /api/plaza` 和 `GET /api/rooms/:id` 直接读 `save.data.level`，广场卡片上的等级靠这个派生值，不写回顶层所有人都会显示 0 级。`owned`、`walls`、`wall` 同样在顶层。
 
-旧存档迁移（`migrate`）：保留 `points / totalScooped / seq / cat / owned / walls / wall`；原 `raw.level` 先 clamp 到 0–10，作为唯一一个盆的等级，顶层 `level` 由各盆等级最大值派生，所以 v1 迁移后顶层 `level` 等于原 level；`raw.poops` 里合法的 `{ id, kind }` 截到该等级容量后放进这个盆；`water / food` 置 1，心情全 0，`sim` 从 `nowMs` 起算，`tutorial.done = true`（老玩家不弹入门说明，`tutorial` 只保留 `done`），`foodKind = 'kibble'`。v1 的 `owned.bowl`（陶瓷饭盆）映射为 `owned.bowlPro`，老玩家的饭盆升级在新模拟层继续生效。`raw.fedUntil`、`raw.totalSquatMs`、`raw.poops` 这几个旧字段被丢弃，不再出现在结果里；`raw.level` 只用于派生盆等级与顶层 `level`，不再作为独立字段保留。若 `raw.v === 2`，补齐缺失字段、同样做 `bowl → bowlPro` 映射与 `tutorial.step` 清理，并重算顶层 `level` 后原样返回。
+旧存档迁移（`migrate`）：保留 `points / totalScooped / seq / cat / owned / walls / wall`；原 `raw.level` 先 clamp 到 0–10，作为唯一一个盆的等级，顶层 `level` 由各盆等级最大值派生，所以 v1 迁移后顶层 `level` 等于原 level；`raw.poops` 里合法的 `{ id, kind }` 截到该等级容量后放进这个盆；`water / food` 置 1，心情全 0，`sim` 从 `nowMs` 起算，`tutorial.done = true`（老玩家不弹入门说明，`tutorial` 只保留 `done`），`foodKind = 'kibble'`。v1 老存档的 `starterBonus` 一律为 0，不注入开局便便，`raw.poops` 为空就是空盆。v1 的 `owned.bowl`（陶瓷饭盆）映射为 `owned.bowlPro`，老玩家的饭盆升级在新模拟层继续生效。`raw.fedUntil`、`raw.totalSquatMs`、`raw.poops` 这几个旧字段被丢弃，不再出现在结果里；`raw.level` 只用于派生盆等级与顶层 `level`，不再作为独立字段保留。若 `raw.v === 2`，补齐缺失字段、同样做 `bowl → bowlPro` 映射与 `tutorial.step` 清理，并重算顶层 `level` 后原样返回；v2 形状缺少 `starterBonus` 或为负数时补成 0，也不向已有的 `boxes` 注入便便。
 
 ## 价格表与攒钱时长
 

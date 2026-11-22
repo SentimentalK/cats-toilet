@@ -29,6 +29,8 @@
   var FRESHENER_BONUS = 5;
   var FOOD_CAP = 3;
   var LONELY_MS = 300000;
+  var STARTER_BONUS = 70;
+  var START_POOP_COUNT = 3;
   var BASE_RATE = 1 / BASE_INTERVAL_MS;
 
   var BOX_LEVELS = Array.from({ length: 11 }, function (_, lv) {
@@ -101,12 +103,13 @@
       level: 0,
       points: 0,
       totalScooped: 0,
-      seq: 1,
+      seq: START_POOP_COUNT + 1,
+      starterBonus: STARTER_BONUS,
       cat: null,
       owned: {},
       walls: { sky: true },
       wall: 'sky',
-      boxes: [createBox(0)],
+      boxes: [{ level: 0, poops: [{ id: 1, kind: 0 }, { id: 2, kind: 1 }, { id: 3, kind: 1 }] }],
       water: 1,
       food: 1,
       mood: { petAt: 0, playAt: 0, treatAt: 0, treatBoost: 0 },
@@ -143,6 +146,7 @@
         points: num(src.points, 0),
         totalScooped: num(src.totalScooped, 0),
         seq: num(src.seq, 1),
+        starterBonus: 0,
         cat: src.cat || null,
         owned: src.owned && typeof src.owned === 'object' ? src.owned : {},
         walls: src.walls && typeof src.walls === 'object' ? src.walls : { sky: true },
@@ -172,6 +176,8 @@
     }
     if (s.points === undefined) s.points = 0;
     if (s.totalScooped === undefined) s.totalScooped = 0;
+    if (typeof s.starterBonus !== 'number') s.starterBonus = 0;
+    else if (s.starterBonus < 0) s.starterBonus = 0;
     if (s.seq === undefined) s.seq = 1;
     if (s.cat === undefined) s.cat = null;
     if (!s.owned || typeof s.owned !== 'object') s.owned = {};
@@ -334,6 +340,13 @@
     return BOX_LEVELS[box.level].value + (state.owned.freshener ? FRESHENER_BONUS : 0);
   }
 
+  function takeStarterBonus(state) {
+    var bonus = Math.floor(num(state.starterBonus, 0));
+    if (bonus < 0) bonus = 0;
+    state.starterBonus = 0;
+    return bonus;
+  }
+
   function scoop(state, boxIndex, poopId) {
     var box = state.boxes[boxIndex];
     if (!box) return 0;
@@ -341,7 +354,7 @@
       if (box.poops[i].id === poopId) {
         box.poops.splice(i, 1);
         state.totalScooped++;
-        var gain = poopValue(state, boxIndex);
+        var gain = poopValue(state, boxIndex) + takeStarterBonus(state);
         state.points += gain;
         return gain;
       }
@@ -356,8 +369,10 @@
       var box = state.boxes[i];
       total += poopValue(state, i) * box.poops.length;
       count += box.poops.length;
-      box.poops = [];
     }
+    if (count === 0) return 0;
+    total += takeStarterBonus(state);
+    for (var b = 0; b < state.boxes.length; b++) state.boxes[b].poops = [];
     state.points += total;
     state.totalScooped += count;
     return total;
@@ -455,6 +470,8 @@
     MAX_BOXES: MAX_BOXES,
     FRESHENER_BONUS: FRESHENER_BONUS,
     FOOD_CAP: FOOD_CAP,
+    STARTER_BONUS: STARTER_BONUS,
+    START_POOP_COUNT: START_POOP_COUNT,
     BOX_LEVELS: BOX_LEVELS,
     PRICES: PRICES,
     FOODS: FOODS,
