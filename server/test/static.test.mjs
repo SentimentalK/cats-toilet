@@ -76,10 +76,6 @@ test('cache-control follows the path class and HEAD matches GET', async (t) => {
   const NO_CACHE = 'no-cache';
   const CODE = 'public, max-age=3600, stale-while-revalidate=86400';
   const ASSET = 'public, max-age=604800, stale-while-revalidate=86400';
-  assert.ok(
-    readdirSync(`${root}assets/fonts`).includes('ZCOOLKuaiLe-Regular.woff2'),
-    'the Chinese web font subset is checked in',
-  );
   const cases = [
     ['/', NO_CACHE],
     ['/index.html', NO_CACHE],

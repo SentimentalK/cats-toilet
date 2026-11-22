@@ -93,6 +93,8 @@ node tools/cf-cache-rules.mjs --apply
 
 token 权限：**Zone:Read** + **Zone:Cache Rules:Edit**；purge 另需 **Zone:Cache Purge**。使用 zone 级 token，不要用 Global API Key。缺 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ZONE_ID` 时 `--apply` 直接非零退出，不发送请求、不打印 token。
 
+> Free / Pro 的 Edge Cache TTL 下限是 2 小时（7,200 s）。免费版上 `code` 规则的 3,600 s 可能被拒绝或被抬到 7,200 s；按本票取 3,600 s，若 API 报 TTL 下限错误，把该规则改成 7,200 s 再 apply。
+
 ### 4.2 用 Dashboard
 
 1. 选中 `mainstayx.com` zone → **Caching → Cache Rules**。
