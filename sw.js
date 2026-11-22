@@ -11,7 +11,7 @@
  */
 'use strict';
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE_PREFIX = 'cats-toilet-';
 const CACHE = CACHE_PREFIX + VERSION;
 const NETWORK_TIMEOUT_MS = 3000;
@@ -71,6 +71,14 @@ const ART = [
   'assets/icons/icon-512.png',
   'assets/icons/icon-maskable-512.png',
   'assets/icons/apple-touch-icon.png',
+  'assets/audio/bgm.mp3',
+  'assets/audio/purr.mp3',
+  'assets/audio/meow.mp3',
+  'assets/audio/meow-long.mp3',
+  'assets/audio/trill.mp3',
+  'assets/audio/happy.mp3',
+  'assets/water-bowl-full.png',
+  'assets/water-bowl-half.png',
 ];
 
 // Source material that is served by the dev server but is not part of the app,

@@ -19,6 +19,7 @@ test('serves the game and its assets with the right types', async (t) => {
     ['/css/style.css', /^text\/css/],
     ['/manifest.webmanifest', /^application\/manifest\+json/],
     ['/sw.js', /^text\/javascript/],
+    ['/assets/audio/bgm.mp3', /^audio\/mpeg$/],
   ];
   // The client is being edited; pick whatever top-level art exists right now.
   const art = readdirSync(`${root}assets`);

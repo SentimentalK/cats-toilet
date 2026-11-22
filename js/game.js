@@ -5,7 +5,11 @@
   const SAVE_KEY = 'cats-toilet-proto-v1';
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const SIM = window.CatSim;
+  const RICH = window.CatRich;
+  const AUDIO = window.CatAudio;
   if (!SIM) throw new Error('CatSim missing');
+  if (!RICH) throw new Error('CatRich missing');
+  if (!AUDIO) throw new Error('CatAudio missing');
 
   // ---------- developer cheats (URL only, never shown in the UI) ----------
   //   index.html?coins=3000           add points (negative takes them away)
@@ -32,6 +36,19 @@
   const FOOD_BOWL_EMPTY = 'assets/bowl-empty.png';
   const FOCUS_X = 44;
   const SAVE_EVERY_MS = 10000;
+  const GROOM_MS = 2000;
+  const HINT_MS = 6000;
+  const AUDIO_SETTINGS = AUDIO.loadSettings(localStorage);
+  const audio = AUDIO.createEngine({
+    AudioContext: window.AudioContext || window.webkitAudioContext,
+    fetch: window.fetch.bind(window),
+    baseUrl: location.href.replace(/[^/]*$/, ''),
+  });
+  audio.setSettings(AUDIO_SETTINGS);
+  const unlockAudio = () => { audio.unlock(); };
+  document.addEventListener('pointerdown', unlockAudio, { capture: true, once: true, passive: true });
+  document.addEventListener('keydown', unlockAudio, { capture: true, once: true });
+  document.addEventListener('click', unlockAudio, { capture: true, once: true, passive: true });
 
   const BOX_ART = [
     { src: 'assets/box-0.png', name: '塑料小盆', aspect: 1.75, w: 11,
@@ -79,7 +96,7 @@
     { id: 'bowl', group: 'gear', name: '陶瓷饭盆', price: SIM.PRICES.bowlPro, desc: '饭盆容量更大、吃得更久',
       src: 'assets/bowl-empty.png', full: 'assets/bowl-full.png', pro: 'food', pos: { x: 47, y: 99, w: 6.5 } },
     { id: 'waterPro', group: 'gear', name: '高级水盆', price: SIM.PRICES.waterPro, desc: '一盆水顶 12 小时，不用总加',
-      src: 'assets/bowl-empty.png', pro: 'water', pos: { x: 40, y: 99, w: 6.5 } },
+      src: 'assets/bowl-empty.png', full: 'assets/water-bowl-full.png', pro: 'water', pos: { x: 40, y: 99, w: 6.5 } },
     { id: 'freshener', group: 'gear', name: '除臭小机器', price: SIM.PRICES.freshener, desc: `臭气消失，每坨多 ${SIM.FRESHENER_BONUS} 积分`,
       src: 'assets/freshener.png', pos: { x: 21, y: 78, w: 5.5 } },
     { id: 'rug', group: 'furniture', name: '爪印地毯', price: SIM.PRICES.rug, desc: '软软的，踩着舒服',
@@ -153,7 +170,7 @@
   let treeSince = 0;
   let grumpAt = 0;
   let lastSaveAt = 0;
-  let bubbleTimer = 0, toastTimer = 0, cheerTimer = 0, walkTimer = 0;
+  let bubbleTimer = 0, toastTimer = 0, cheerTimer = 0, walkTimer = 0, groomTimer = 0;
   let sheetKind = null, shopTab = 'all', sheetBox = 0;
   const cat = { at: 'idle', pose: 'sit' };
 
@@ -299,6 +316,10 @@
     return { ...POS.cat, z: zOf(POS.cat.y) };
   }
   function setPose(name, where = cat.at) {
+    if (name !== 'groom') {
+      clearTimeout(groomTimer);
+      el.cat.classList.remove('washing');
+    }
     const pose = POSES[name], spot = spotOf(where);
     catImg.src = poseSrc(name);
     let x = spot.x, w = spot.fixed ? spot.w : spot.w * pose.k;
@@ -502,7 +523,7 @@
     const w = el.scene.offsetWidth, view = el.room.clientWidth;
     const lo = el.room.scrollLeft / w * 100, hi = (el.room.scrollLeft + view) / w * 100;
     const half = Math.min(18, (hi - lo) / 2);
-    el.bubble.textContent = text;
+    el.bubble.innerHTML = RICH.toHtml(String(text));
     el.bubble.style.left = clamp(r.x, lo + half, hi - half) + '%';
     el.bubble.style.bottom = (100 - r.y + 2.5) + '%';
     el.bubble.hidden = true; void el.bubble.offsetWidth; el.bubble.hidden = false;
@@ -510,7 +531,7 @@
   }
   function toast(text) {
     clearTimeout(toastTimer);
-    el.toast.textContent = text;
+    el.toast.innerHTML = RICH.toHtml(String(text));
     el.toast.hidden = true; void el.toast.offsetWidth; el.toast.hidden = false;
     toastTimer = setTimeout(() => { el.toast.hidden = true; }, 2200);
   }
@@ -553,8 +574,10 @@
     if (!poop) return;
     const node = boxEls[boxIndex] ? boxEls[boxIndex].poops.querySelector(`[data-id="${id}"]`) : null;
     const from = node ? sceneXY(node.getBoundingClientRect()) : null;
+    const bonus = state.starterBonus > 0;
     const gain = SIM.scoop(state, boxIndex, id);
     if (!gain) return;
+    if (bonus) toast(`新手礼 +${SIM.STARTER_BONUS} 积分喵！`);
     save(); renderBoxes(); renderPanel(); renderTick(now());
     flyToBag(from, poop.kind, 0);
     if (from) {
@@ -574,8 +597,10 @@
       });
     });
     if (!flights.length) { say('盆里干干净净喵～'); return; }
+    const bonus = state.starterBonus > 0;
     const total = SIM.scoopAll(state);
     if (!total) { renderBoxes(); return; }
+    if (bonus) toast(`新手礼 +${SIM.STARTER_BONUS} 积分喵！`);
     keepInView(POS.box.x);
     save(); renderBoxes(); renderPanel(); renderTick(now());
     flights.forEach((f, k) => flyToBag(f.from, f.kind, k * 130));
@@ -669,8 +694,12 @@
     const bowlImg = el.foodBowl.querySelector('img');
     if (bowlImg.getAttribute('src') !== bowlSrc) bowlImg.setAttribute('src', bowlSrc);
     el.foodBowl.classList.toggle('has-food', state.food > 0);
+    const waterSrc = state.water <= 0 ? 'assets/bowl-empty.png'
+      : state.water < 0.5 ? 'assets/water-bowl-half.png' : 'assets/water-bowl-full.png';
+    const waterImg = el.waterBowl.querySelector('img');
+    if (waterImg.getAttribute('src') !== waterSrc) waterImg.setAttribute('src', waterSrc);
     el.reasons.innerHTML = SIM.reasons(state, t)
-      .map((r) => `<li class="reason" data-reason="${r.id}">${r.text}</li>`).join('');
+      .map((r) => `<li class="reason" data-reason="${r.id}">${RICH.toHtml(r.text)}</li>`).join('');
     const total = state.boxes.reduce((n, box) => n + box.poops.length, 0);
     el.scoopBadge.hidden = !total;
     el.scoopBadge.textContent = total;
@@ -859,8 +888,16 @@
   }
 
   function openSettings() {
+    const a = audio.settings;
+    const pct = (v) => Math.round(v * 100);
     openSheet('设置', `
-      <p class="sheet-note" style="margin-bottom:12px">猫会自己上厕所，你负责铲屎、加水、买饭和摸头。登录后进度存在云端；游客模式只存在这台设备的浏览器里。</p>
+      <p class="sheet-note" style="margin-bottom:12px">${RICH.toHtml('猫会自己上厕所，你负责铲屎、加水、买饭和摸头。登录后进度存在云端；游客模式只存在这台设备的浏览器里。')}</p>
+      <div class="set-rows">
+        <div class="set-row"><label for="set-music">音乐</label><input type="checkbox" id="set-music"${a.musicOn ? ' checked' : ''}></div>
+        <div class="set-row"><label for="set-music-vol">音量</label><input type="range" id="set-music-vol" min="0" max="100" step="1" value="${pct(a.musicVol)}"><output id="set-music-val">${pct(a.musicVol)}%</output></div>
+        <div class="set-row"><label for="set-sfx">音效</label><input type="checkbox" id="set-sfx"${a.sfxOn ? ' checked' : ''}></div>
+        <div class="set-row"><label for="set-sfx-vol">音量</label><input type="range" id="set-sfx-vol" min="0" max="100" step="1" value="${pct(a.sfxVol)}"><output id="set-sfx-val">${pct(a.sfxVol)}%</output></div>
+      </div>
       <button class="big-btn plain" data-act="reset">重置存档</button>`, 'settings');
   }
 
@@ -956,7 +993,16 @@
     go('bowl', 'eat', () => {
       say('吧唧吧唧…好吃喵！', EAT_MS);
       setTimeout(() => {
-        if (!busy && cat.at === 'bowl') go('idle', 'sit');
+        if (busy || squattingNow || cat.at !== 'bowl') {
+          if (!busy && cat.at === 'bowl') go('idle', 'sit');
+          return;
+        }
+        setPose('groom');
+        el.cat.classList.add('washing');
+        groomTimer = setTimeout(() => {
+          el.cat.classList.remove('washing');
+          if (!busy && cat.at === 'bowl') go('idle', 'sit');
+        }, GROOM_MS);
       }, EAT_MS);
     });
   }
@@ -980,7 +1026,7 @@
     const it = ITEM[id];
     if (!it || itemEls[id]) return;
     if (it.pro === 'food') { el.foodBowl.classList.add('pro'); itemEls[id] = el.foodBowl; return; }
-    if (it.pro === 'water') { el.waterBowl.classList.add('pro'); itemEls[id] = el.waterBowl; return; }
+    if (it.pro === 'water') { itemEls[id] = el.waterBowl; return; }
     const z = it.pos.z != null ? it.pos.z : zOf(it.pos.y);
     const node = mkSprite(it.src, { ...it.pos, z });
     node.dataset.item = id;
@@ -1017,10 +1063,19 @@
 
   let onbStep = 0;
   let onbHelp = false;
+  let hintShown = false;
+  function hintStarterScoop() {
+    if (state.starterBonus > 0 && state.totalScooped === 0 && !hintShown) {
+      hintShown = true;
+      setTimeout(() => {
+        if (!busy) say(`盆里有 3 坨便便，可以铲了喵！\n铲屎换积分，第一次铲还有 ${SIM.STARTER_BONUS} 新手礼。`, HINT_MS);
+      }, 500);
+    }
+  }
   function renderOnboarding() {
     const step = ONBOARDING[onbStep];
     el.onbStep.textContent = step.title;
-    el.onbText.textContent = step.text;
+    el.onbText.innerHTML = RICH.toHtml(step.text);
     el.onbNext.textContent = onbStep === ONBOARDING.length - 1 ? '开始养猫' : '下一步';
   }
   function openOnboarding(fromHelp) {
@@ -1034,6 +1089,7 @@
     if (onbHelp) return;
     state.tutorial.done = true;
     save();
+    hintStarterScoop();
   }
 
   function tick() {
@@ -1053,6 +1109,26 @@
     renderBoxes();
     renderTick(now());
   }
+
+  function applyAudioSettings() {
+    const music = $('#set-music'), sfx = $('#set-sfx');
+    const mv = $('#set-music-vol'), sv = $('#set-sfx-vol');
+    const partial = {};
+    if (music) partial.musicOn = music.checked;
+    if (sfx) partial.sfxOn = sfx.checked;
+    if (mv) partial.musicVol = Number(mv.value) / 100;
+    if (sv) partial.sfxVol = Number(sv.value) / 100;
+    if (!Object.keys(partial).length) return;
+    audio.setSettings(partial);
+    AUDIO.saveSettings(localStorage, audio.settings);
+    const mvo = $('#set-music-val'), svo = $('#set-sfx-val');
+    if (mvo) mvo.textContent = Math.round(audio.settings.musicVol * 100) + '%';
+    if (svo) svo.textContent = Math.round(audio.settings.sfxVol * 100) + '%';
+  }
+  const onAudioSetting = (e) => {
+    if (!e.target.id || !e.target.id.startsWith('set-')) return;
+    applyAudioSettings();
+  };
 
   el.tabScoop.addEventListener('click', () => { poke(); scoopAll(); });
   el.tabShop.addEventListener('click', () => { poke(); openShop('all'); });
@@ -1114,11 +1190,15 @@
     }
   });
 
+  el.sheetBody.addEventListener('input', onAudioSetting);
+  el.sheetBody.addEventListener('change', onAudioSetting);
+
   el.cat.classList.add('tappable');
   el.scoop.classList.add('tappable');
   el.cat.addEventListener('click', () => {
     if (busy) return;
     const asleep = wake();
+    audio.playCat();
     poke();
     SIM.pet(state, now());
     save();
@@ -1138,6 +1218,7 @@
   });
 
   if (!state.tutorial.done) openOnboarding(false);
+  else setTimeout(hintStarterScoop, 0);
 
   const preload = [...Object.keys(POSES).map(poseSrc), ...BOX_ART.map((a) => a.src), ...POOP_SRC,
     ...ITEMS.flatMap((it) => [it.src, it.full].filter(Boolean)), 'assets/bowl-empty.png'];
@@ -1177,10 +1258,14 @@
 
   window.__game = {
     get state() { return state; }, get cat() { return cat; }, get squatting() { return SIM.isSquatting(state, now()); },
-    SAVE_KEY, CAT_ID, DEFAULT_CAT, say, toast,
+    SAVE_KEY, CAT_ID, DEFAULT_CAT, say, toast, GROOM_MS, STARTER_BONUS: SIM.STARTER_BONUS,
     BOX_ART, POS, LEVELS, WALK, ITEMS, WALLS, SIM,
     setPose, go, renderPanel, renderBoxes, addPoints, save,
     buy, pickWall, openShop, openBoxUpgrade, panTo,
     now, advanceClock: (ms) => { clock.offset += ms; tick(); renderAll(); },
+  };
+  window.__audio = {
+    status: () => audio.status(),
+    get settings() { return { ...audio.settings }; },
   };
 })();
