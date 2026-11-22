@@ -89,6 +89,22 @@ function endpoint(zone) {
   return `${API}/zones/${encodeURIComponent(zone)}/rulesets/phases/${PHASE}/entrypoint`;
 }
 
+function printPayload(zone, note) {
+  console.log(JSON.stringify({
+    method: 'PUT',
+    url: zone ? endpoint(zone) : `${API}/zones/<CLOUDFLARE_ZONE_ID>/rulesets/phases/${PHASE}/entrypoint`,
+    note,
+    body: { rules: RULES },
+  }, null, 2));
+}
+
+// Rules returned by GET carry id/version/last_updated; sending them back can be
+// rejected or reorder rules, so only the mutable fields go into the PUT.
+const RULE_FIELDS = ['description', 'expression', 'action', 'action_parameters', 'enabled'];
+const cleanRule = (r) => Object.fromEntries(
+  RULE_FIELDS.filter((k) => r[k] !== undefined).map((k) => [k, r[k]]),
+);
+
 async function cf(method, url, token, body) {
   const res = await fetch(url, {
     method,
@@ -128,7 +144,9 @@ async function apply(token, zone) {
   if (got.status !== 200) throw new Error(apiError('GET entrypoint', got, token));
   const existing = got.json?.result?.rules ?? [];
 
-  const keep = existing.filter((r) => !String(r.description ?? '').startsWith(PREFIX));
+  const keep = existing
+    .filter((r) => !String(r.description ?? '').startsWith(PREFIX))
+    .map(cleanRule);
   const replaced = existing.length - keep.length;
   // Our rules go first: Cloudflare evaluates in order, and these expressions are
   // narrow path prefixes, so they must win over broad zone defaults.
@@ -151,18 +169,14 @@ async function main() {
   const zone = process.env.CLOUDFLARE_ZONE_ID || '';
 
   if (!doApply) {
-    console.log(JSON.stringify({
-      method: 'PUT',
-      url: zone ? endpoint(zone) : `${API}/zones/<CLOUDFLARE_ZONE_ID>/rulesets/phases/${PHASE}/entrypoint`,
-      note: 'dry run: no network. --apply gets the current entrypoint and merges these rules first; other rules are kept.',
-      body: { rules: RULES },
-    }, null, 2));
+    printPayload(zone, 'dry run: no network. --apply gets the current entrypoint and merges these rules first; other rules are kept.');
     return;
   }
 
   if (!token || !zone) {
     const missing = [!token && 'CLOUDFLARE_API_TOKEN', !zone && 'CLOUDFLARE_ZONE_ID'].filter(Boolean);
-    console.error(`--apply needs ${missing.join(' and ')} in the environment; nothing was sent.`);
+    printPayload(zone, `未应用 (not applied): missing ${missing.join(' and ')}; nothing was sent.`);
+    console.error(`--apply needs ${missing.join(' and ')} in the environment; not applied.`);
     console.error('Create a scoped token with Zone:Read + Zone:Cache Rules:Edit, then re-run.');
     process.exit(1);
   }

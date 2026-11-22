@@ -146,6 +146,7 @@ export async function launch({ port = 9555, userDataDir, width = 390, height = 8
 
   const send = (method, params, sid = sessionId.sessionId) => ws.send(method, params, sid);
   const errors = [];
+  const network = [];
   const responseStatus = new Map();
   const awaitingStatus = new Map();
 
@@ -169,6 +170,13 @@ export async function launch({ port = 9555, userDataDir, width = 390, height = 8
     if (msg.sessionId !== sessionId.sessionId) return;
     if (msg.method === 'Network.responseReceived') {
       const { requestId, response } = msg.params;
+      network.push({
+        url: response.url,
+        status: response.status,
+        type: response.type,
+        headers: response.headers,
+        fromServiceWorker: !!response.fromServiceWorker,
+      });
       responseStatus.set(requestId, response.status);
       awaitingStatus.get(requestId)?.(response.status);
       awaitingStatus.delete(requestId);
@@ -227,6 +235,7 @@ export async function launch({ port = 9555, userDataDir, width = 390, height = 8
 
   const page = {
     errors,
+    network,
 
     async addInitScript(script) {
       await send('Page.addScriptToEvaluateOnNewDocument', { source: script });

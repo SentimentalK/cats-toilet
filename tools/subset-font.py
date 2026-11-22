@@ -2,8 +2,9 @@
 """Build the Chinese UI font subset (WOFF2).
 
 Scans index.html, js/*.js and css/*.css for every character the interface can
-show, adds printable ASCII and common CJK punctuation, then runs the same
-subsetter as the pyftsubset CLI (fontTools.subset.main) with
+show, adds printable ASCII, common CJK punctuation and the first 3000 entries
+of tools/common-hanzi.txt (现代汉语常用字表), then runs the same subsetter as
+the pyftsubset CLI (fontTools.subset.main) with
 
     --flavor=woff2 --layout-features='*' --no-hinting
 
@@ -26,6 +27,8 @@ from fontTools.ttLib import TTFont
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "assets", "fonts", "ZCOOLKuaiLe-Regular.ttf")
 OUT = os.path.join(ROOT, "assets", "fonts", "ZCOOLKuaiLe-Regular.woff2")
+COMMON_FILE = os.path.join(ROOT, "tools", "common-hanzi.txt")
+COMMON_LIMIT = 3000
 LIMIT = 400 * 1024
 
 # ASCII the UI uses for numbers, units and the Latin wordmark, plus the CJK
@@ -39,13 +42,23 @@ ALWAYS = (
 )
 
 
-def gather_text() -> str:
+def common_chars() -> str:
+    rows: list[str] = []
+    with open(COMMON_FILE, encoding="utf-8") as fh:
+        for line in fh:
+            if line.lstrip().startswith("#"):
+                continue
+            rows.extend(c for c in line if not c.isspace())
+    return "".join(rows[:COMMON_LIMIT])
+
+
+def gather_text(common: str) -> str:
     files = [os.path.join(ROOT, "index.html")]
     files += sorted(glob.glob(os.path.join(ROOT, "js", "*.js")))
     files += sorted(glob.glob(os.path.join(ROOT, "css", "*.css")))
     if not files:
         sys.exit("no input files found")
-    chars: set[str] = set(ALWAYS)
+    chars: set[str] = set(ALWAYS) | set(common)
     for path in files:
         with open(path, encoding="utf-8") as fh:
             chars.update(fh.read())
@@ -62,7 +75,8 @@ def missing(text: str) -> list[str]:
 def main() -> int:
     if not os.path.isfile(SRC):
         sys.exit(f"missing source font: {SRC}")
-    text = gather_text()
+    common = common_chars()
+    text = gather_text(common)
     args = [
         SRC,
         f"--text={text}",
@@ -72,7 +86,7 @@ def main() -> int:
         "--no-hinting",
     ]
     print(f"subsetting {os.path.relpath(SRC, ROOT)} ({os.path.getsize(SRC):,} B) "
-          f"with {len(text)} characters")
+          f"with {len(text)} characters ({len(set(common))} common)")
     subset.main(args)
 
     size = os.path.getsize(OUT)
@@ -80,6 +94,12 @@ def main() -> int:
     gaps = missing(text)
     if gaps:
         print(f"not in source font, system fallback will draw them: {''.join(gaps)}")
+    out_cmap = TTFont(OUT).getBestCmap()
+    common_gaps = [c for c in dict.fromkeys(common) if ord(c) not in out_cmap]
+    if common_gaps:
+        print(f"FAIL: common characters missing from {os.path.basename(OUT)}: {''.join(common_gaps)}",
+              file=sys.stderr)
+        return 1
     if size >= LIMIT:
         print(f"FAIL: {size:,} B is not below the {LIMIT:,} B budget", file=sys.stderr)
         return 1

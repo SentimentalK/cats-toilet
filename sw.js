@@ -1,17 +1,17 @@
 /* 俺家的猫厕所 — service worker.
  *
- * Network-first for every same-origin GET, falling back to the cache when the
- * network fails or takes longer than NETWORK_TIMEOUT_MS. Every successful
- * same-origin response is written to the cache, so art added to assets/ later
- * works offline once it has been loaded online.
+ * Cache-first for /js/, /css/ and /assets/: a hit answers without a request,
+ * a miss goes to the network and is stored for next time. Navigation, HTML,
+ * sw.js and the manifest stay network-first with a NETWORK_TIMEOUT_MS fallback
+ * so a deploy is picked up immediately.
  *
  * All paths are relative to this file, so the app works from a subdirectory.
- * Bump VERSION when the precache list changes (any byte change to this file
- * also makes browsers install the new worker).
+ * Bump VERSION on any deploy that changes js/, css/, assets/ or this file:
+ * the install fetches with `cache: 'reload'` and drops old caches on activate.
  */
 'use strict';
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE_PREFIX = 'cats-toilet-';
 const CACHE = CACHE_PREFIX + VERSION;
 const NETWORK_TIMEOUT_MS = 3000;
@@ -88,6 +88,10 @@ const ART = [
 // buffered into one).
 const NEVER_CACHE = ['assets/raw/', 'design/', 'tools/', 'api/'].map((p) => new URL(p, self.location).pathname);
 
+// Served from the cache first; VERSION carries deploys of these files.
+const CACHE_FIRST = ['js/', 'css/', 'assets/'].map((p) => new URL(p, self.location).pathname);
+const SHELL_FILES = ['sw.js', 'manifest.webmanifest'].map((p) => new URL(p, self.location).pathname);
+
 // `cache: 'reload'` bypasses the HTTP cache so a fresh install gets fresh files.
 const fresh = (url) => new Request(new URL(url, self.location), { cache: 'reload' });
 
@@ -119,8 +123,35 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (NEVER_CACHE.some((p) => url.pathname.startsWith(p))) return;
   if (req.headers.has('range')) return; // partial responses cannot be cached
+  const shell = req.mode === 'navigate'
+    || url.pathname.endsWith('.html')
+    || SHELL_FILES.includes(url.pathname);
+  if (shell) {
+    event.respondWith(networkFirst(event));
+    return;
+  }
+  if (CACHE_FIRST.some((p) => url.pathname.startsWith(p))) {
+    event.respondWith(cacheFirst(event));
+    return;
+  }
   event.respondWith(networkFirst(event));
 });
+
+async function cacheFirst(event) {
+  const req = event.request;
+  const cached = await fromCache(req);
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('X-SW-Cache', 'hit');
+    return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers });
+  }
+  const res = await fetch(req);
+  if (res.ok && res.status === 200 && res.type === 'basic') {
+    const copy = res.clone();
+    event.waitUntil(caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {}));
+  }
+  return res;
+}
 
 async function networkFirst(event) {
   const req = event.request;
