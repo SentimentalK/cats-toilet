@@ -485,8 +485,23 @@ const CAT_IMG_BOX = `(() => {
   return { w: r.width, h: r.height, nw: img.naturalWidth, pose: document.querySelector('#cat').dataset.pose };
 })()`;
 
-// breathe/hop/strain scale the image over time; measure the resting size
-const FREEZE_CAT = (on) => `document.querySelector('#cat > img').style.animation = ${on ? "'none'" : "''"}`;
+// breathe/hop/strain rescale the image every frame: what the player sees is a range.
+const CAT_EXTREMES = (ms) => `new Promise((resolve) => {
+  const img = document.querySelector('#cat > img');
+  const pose = () => document.querySelector('#cat').dataset.pose;
+  const startPose = pose();
+  let min = Infinity, max = 0, left = false;
+  const stop = performance.now() + ${ms};
+  const tick = () => {
+    const h = img.getBoundingClientRect().height;
+    if (h < min) min = h;
+    if (h > max) max = h;
+    if (pose() !== startPose) left = true;
+    if (performance.now() < stop) requestAnimationFrame(tick);
+    else resolve({ min, max, pose: startPose, left });
+  };
+  requestAnimationFrame(tick);
+})`;
 
 test('CAT-004 追加 — 坐/走/蹲的猫大小一致', { timeout: 180_000 }, async (t) => {
   await withGame(
@@ -498,45 +513,45 @@ test('CAT-004 追加 — 坐/走/蹲的猫大小一致', { timeout: 180_000 }, a
 
       await page.click(SEL.cat);
       await page.waitFor("document.querySelector('#cat').dataset.pose === 'sit'", 5000);
-      await page.waitFor("document.querySelector('#bubble').hidden", 6000);
-      await page.waitFor("document.querySelector('#cat').dataset.pose === 'sit'", 8000);
-      await page.evaluate(FREEZE_CAT(true));
-      const sit = await page.evaluate(CAT_IMG_BOX);
+      await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
+      const sit = await page.evaluate(CAT_EXTREMES(3400));
       assert.equal(sit.pose, 'sit');
+      assert.equal(sit.left, false, 'left the sit pose while sampling');
+      const sitBox = await page.evaluate(CAT_IMG_BOX);
+      await page.waitFor("document.querySelector('#bubble').hidden", 3000);
       await page.shot(`${shotDir}/scale-sit.png`);
-      await page.evaluate(FREEZE_CAT(false));
 
       const squatting = await page.evaluate(`(() => {
         const g = window.__game;
-        g.state.sim.fill = 1 - 1200 * g.SIM.rateAt(g.state, g.now());
+        g.state.sim.fill = 1 - 6000 * g.SIM.rateAt(g.state, g.now());
         return g.SIM.isSquatting(g.state, g.now());
       })()`);
       assert.equal(squatting, true);
 
       await page.waitFor("document.querySelector('#cat').dataset.pose === 'walk'", 5000);
       await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
-      await page.evaluate(FREEZE_CAT(true));
       const walk = await page.evaluate(CAT_IMG_BOX);
       assert.equal(walk.pose, 'walk');
       await page.shot(`${shotDir}/scale-walk.png`);
-      await page.evaluate(FREEZE_CAT(false));
 
       await page.waitFor("document.querySelector('#cat').dataset.pose === 'squat'", 8000);
       await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
-      await page.evaluate(FREEZE_CAT(true));
-      const squat = await page.evaluate(CAT_IMG_BOX);
+      const squat = await page.evaluate(CAT_EXTREMES(1300));
       assert.equal(squat.pose, 'squat');
+      assert.equal(squat.left, false, 'left the squat pose while sampling');
+      const squatBox = await page.evaluate(CAT_IMG_BOX);
       await page.shot(`${shotDir}/scale-squat.png`);
-      await page.evaluate(FREEZE_CAT(false));
 
-      const ratio = squat.h / sit.h;
-      const walkRatio = walk.w / sit.w;
-      const sourceRatio = walk.nw / sit.nw;
-      t.diagnostic(`sit ${sit.w.toFixed(1)}x${sit.h.toFixed(1)} walk ${walk.w.toFixed(1)}x${walk.h.toFixed(1)} squat ${squat.w.toFixed(1)}x${squat.h.toFixed(1)} h-ratio ${ratio.toFixed(3)} w-ratio ${walkRatio.toFixed(3)} source ${sourceRatio.toFixed(3)}`);
-      assert.ok(ratio >= 0.9 && ratio <= 1.0, `squat/sit height ${ratio.toFixed(3)} (sit ${sit.h} squat ${squat.h})`);
+      const floor = squat.min / sit.max;
+      const ceiling = squat.max / sit.min;
+      const walkRatio = walk.w / sitBox.w;
+      const sourceRatio = walk.nw / sitBox.nw;
+      t.diagnostic(`sit ${sitBox.w.toFixed(1)}x${sit.min.toFixed(1)}..${sit.max.toFixed(1)} walk ${walk.w.toFixed(1)}x${walk.h.toFixed(1)} squat ${squatBox.w.toFixed(1)}x${squat.min.toFixed(1)}..${squat.max.toFixed(1)} h-ratio ${floor.toFixed(3)}..${ceiling.toFixed(3)} w-ratio ${walkRatio.toFixed(3)} source ${sourceRatio.toFixed(3)}`);
+      assert.ok(floor >= 0.9 && ceiling <= 1.0,
+        `squat/sit height ${floor.toFixed(3)}..${ceiling.toFixed(3)} (sit ${sit.min.toFixed(1)}..${sit.max.toFixed(1)} squat ${squat.min.toFixed(1)}..${squat.max.toFixed(1)})`);
       assert.ok(Math.abs(walkRatio - sourceRatio) <= sourceRatio * 0.05,
         `walk/sit width ${walkRatio.toFixed(3)} vs source ${sourceRatio.toFixed(3)}`);
-      assert.ok(walkRatio <= 1.8, `walk/sit width ${walkRatio.toFixed(3)} (sit ${sit.w} walk ${walk.w})`);
+      assert.ok(walkRatio <= 1.8, `walk/sit width ${walkRatio.toFixed(3)} (sit ${sitBox.w} walk ${walk.w})`);
     },
     opts(async ({ base }) => seedScript({
       token: (await makeUser(base)).token,

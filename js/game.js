@@ -79,7 +79,7 @@
   const DEFAULT_CAT = 'domestic-orange';
   const SQUAT_REF_ASPECT = 1.27;
   // A squat must read at the sitting cat's size.
-  const SQUAT_HEIGHT_RATIO = 0.95;
+  const SQUAT_HEIGHT_RATIO = 0.97;
   const CAT_ART = { sitW: 0, sitH: 0 };
   const POSES = {
     sit: { k: 1 },
@@ -1287,7 +1287,7 @@
   renderBoxes(); renderPanel(); renderTick(now());
   panTo(FOCUS_X, false);
   setInterval(tick, 200);
-  setTimeout(() => { if (!busy) say(state.totalScooped ? '欢迎回家喵～' : '欢迎来到俺家的猫厕所喵！', 4000); }, 600);
+  setTimeout(() => { if (!busy && el.bubble.hidden) say(state.totalScooped ? '欢迎回家喵～' : '欢迎来到俺家的猫厕所喵！', 4000); }, 600);
 
   window.__game = {
     get state() { return state; }, get cat() { return cat; }, get squatting() { return SIM.isSquatting(state, now()); },
