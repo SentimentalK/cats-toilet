@@ -32,6 +32,8 @@ import {
 const PORTS = { port: 8791, cdpPort: 9556 };
 const guard = (name) => 'e2e-seed-' + name;
 
+const flat = (s) => s.replace(/\s*\n\s*/g, '');
+
 const ONBOARDING = [
   { title: '猫会自己拉便便', text: '不用你点，猫过一会儿就自己去猫砂盆。盆满了它就憋着，还会生气。' },
   { title: '铲屎换积分', text: '点便便或者下面的「铲屎」，把便便铲进垃圾袋，每坨都能换积分。' },
@@ -50,7 +52,7 @@ test('需求 1 — 入门说明', { timeout: 90_000 }, async (t) => {
       for (const [i, step] of ONBOARDING.entries()) {
         const last = i === ONBOARDING.length - 1;
         assert.equal((await page.text(SEL.onboardingStep)).trim(), step.title);
-        assert.equal((await page.text(SEL.onboardingText)).trim(), step.text);
+        assert.equal(flat((await page.text(SEL.onboardingText)).trim()), step.text);
         assert.equal((await page.text(SEL.onboardingNext)).trim(), last ? '开始养猫' : '下一步');
         await page.click(SEL.onboardingNext);
       }
@@ -63,7 +65,7 @@ test('需求 1 — 入门说明', { timeout: 90_000 }, async (t) => {
       await page.click(SEL.help);
       await waitVisible(page, SEL.onboarding);
       assert.equal((await page.text(SEL.onboardingStep)).trim(), ONBOARDING[0].title);
-      assert.equal((await page.text(SEL.onboardingText)).trim(), ONBOARDING[0].text);
+      assert.equal(flat((await page.text(SEL.onboardingText)).trim()), ONBOARDING[0].text);
       assert.equal((await page.text(SEL.onboardingNext)).trim(), '下一步');
       await waitSettled(page, SEL.onboarding);
       await page.shot(`${shotDir}/req-01-onboarding.png`);

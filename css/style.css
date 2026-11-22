@@ -238,7 +238,6 @@ img { -webkit-user-drag: none; }
 @keyframes bubble-in { 0% { transform: translate(-50%, 10px) scale(.7); opacity: 0; } }
 
 .seg { display: block; }
-#onboarding-text .seg { display: inline; }
 .kw { font-weight: 700; }
 .kw-scoop { color: #b5462b; }
 .kw-points { color: #b8860b; }

@@ -117,23 +117,28 @@ test('CAT-004 需求 2 — 分段/高亮/转义', { timeout: 120_000 }, async (t
 
       const classes = new Set();
       let maxSegs = 0;
+      let stacked = 0;
       for (const [i, step] of ONBOARDING.entries()) {
         const probe = await page.evaluate(`(() => {
           const el = document.querySelector('#onboarding-text');
+          const segs = [...el.querySelectorAll('.seg')];
           return {
             text: el.textContent,
-            segs: el.querySelectorAll('.seg').length,
+            segs: segs.length,
+            tops: segs.map((s) => s.getBoundingClientRect().top),
             classes: [...el.querySelectorAll('.kw')].map((k) => [...k.classList].find((c) => c.startsWith('kw-')))
           };
         })()`);
         assert.equal(probe.text, step.text, `step ${i}`);
         assert.ok(probe.segs >= 1, `step ${i} has segments`);
+        if (probe.segs >= 2 && probe.tops[1] > probe.tops[0] + 2) stacked++;
         maxSegs = Math.max(maxSegs, probe.segs);
         for (const cls of probe.classes) classes.add(cls);
         await page.click(SEL.onboardingNext);
       }
       await waitHidden(page, SEL.onboarding);
       assert.ok(maxSegs >= 2, 'at least one onboarding step splits into 2+ segments');
+      assert.ok(stacked >= 1, 'segmented onboarding lines stack vertically');
       for (const cls of ['kw-scoop', 'kw-points', 'kw-water', 'kw-food', 'kw-mood', 'kw-shop']) {
         assert.ok(classes.has(cls), `onboarding highlights ${cls}`);
       }
@@ -336,6 +341,8 @@ test('CAT-004 需求 6 — 开局 3 坨、首铲 100、老存档不注入', { ti
         return !b.hidden && b.textContent.includes('新手礼') && b.textContent.includes('可以铲了')
           && !!b.querySelector('.kw-scoop') && !!b.querySelector('.kw-points');
       })()`, 8000);
+      const hintTops = await page.evaluate("[...document.querySelectorAll('#bubble .seg')].map((s) => s.getBoundingClientRect().top)");
+      assert.ok(hintTops.length >= 2 && hintTops[1] > hintTops[0] + 2, 'hint lines stack vertically');
       await page.shot(`${shotDir}/req-06-starter-hint.png`);
 
       await page.click(SEL.poop);
@@ -382,6 +389,7 @@ test('CAT-004 水碗满/半水接入', { timeout: 150_000 }, async (t) => {
       await ready(page);
       await skipOnboarding(page);
       assert.equal(await page.evaluate("document.querySelector('#water-bowl img').getAttribute('src')"), 'assets/water-bowl-full.png');
+      await page.shot(`${shotDir}/req-07-water-full.png`);
 
       await page.addInitScript(seedScript({ token: (await makeUser(base)).token, save: freshSave({ water: 0.3 }), guard: guard('req7b') }));
       await reloadRoom(page, base + ROOM);
