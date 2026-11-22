@@ -480,10 +480,13 @@ test('CAT-004 水碗满/半水接入', { timeout: 150_000 }, async (t) => {
 });
 
 const CAT_IMG_BOX = `(() => {
-  const r = document.querySelector('#cat > img').getBoundingClientRect();
-  const c = document.querySelector('#cat');
-  return { w: r.width, h: r.height, pose: c.dataset.pose };
+  const img = document.querySelector('#cat > img');
+  const r = img.getBoundingClientRect();
+  return { w: r.width, h: r.height, nw: img.naturalWidth, pose: document.querySelector('#cat').dataset.pose };
 })()`;
+
+// breathe/hop/strain scale the image over time; measure the resting size
+const FREEZE_CAT = (on) => `document.querySelector('#cat > img').style.animation = ${on ? "'none'" : "''"}`;
 
 test('CAT-004 追加 — 坐/走/蹲的猫大小一致', { timeout: 180_000 }, async (t) => {
   await withGame(
@@ -495,10 +498,13 @@ test('CAT-004 追加 — 坐/走/蹲的猫大小一致', { timeout: 180_000 }, a
 
       await page.click(SEL.cat);
       await page.waitFor("document.querySelector('#cat').dataset.pose === 'sit'", 5000);
-      await sleep(150);
+      await page.waitFor("document.querySelector('#bubble').hidden", 6000);
+      await page.waitFor("document.querySelector('#cat').dataset.pose === 'sit'", 8000);
+      await page.evaluate(FREEZE_CAT(true));
       const sit = await page.evaluate(CAT_IMG_BOX);
       assert.equal(sit.pose, 'sit');
       await page.shot(`${shotDir}/scale-sit.png`);
+      await page.evaluate(FREEZE_CAT(false));
 
       const squatting = await page.evaluate(`(() => {
         const g = window.__game;
@@ -509,21 +515,27 @@ test('CAT-004 追加 — 坐/走/蹲的猫大小一致', { timeout: 180_000 }, a
 
       await page.waitFor("document.querySelector('#cat').dataset.pose === 'walk'", 5000);
       await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
+      await page.evaluate(FREEZE_CAT(true));
       const walk = await page.evaluate(CAT_IMG_BOX);
       assert.equal(walk.pose, 'walk');
       await page.shot(`${shotDir}/scale-walk.png`);
+      await page.evaluate(FREEZE_CAT(false));
 
       await page.waitFor("document.querySelector('#cat').dataset.pose === 'squat'", 8000);
       await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
-      await sleep(150);
+      await page.evaluate(FREEZE_CAT(true));
       const squat = await page.evaluate(CAT_IMG_BOX);
       assert.equal(squat.pose, 'squat');
       await page.shot(`${shotDir}/scale-squat.png`);
+      await page.evaluate(FREEZE_CAT(false));
 
       const ratio = squat.h / sit.h;
       const walkRatio = walk.w / sit.w;
-      t.diagnostic(`sit ${sit.w.toFixed(1)}x${sit.h.toFixed(1)} walk ${walk.w.toFixed(1)}x${walk.h.toFixed(1)} squat ${squat.w.toFixed(1)}x${squat.h.toFixed(1)} h-ratio ${ratio.toFixed(3)} w-ratio ${walkRatio.toFixed(3)}`);
-      assert.ok(ratio >= 0.8 && ratio <= 1.1, `squat/sit height ${ratio.toFixed(3)} (sit ${sit.h} squat ${squat.h})`);
+      const sourceRatio = walk.nw / sit.nw;
+      t.diagnostic(`sit ${sit.w.toFixed(1)}x${sit.h.toFixed(1)} walk ${walk.w.toFixed(1)}x${walk.h.toFixed(1)} squat ${squat.w.toFixed(1)}x${squat.h.toFixed(1)} h-ratio ${ratio.toFixed(3)} w-ratio ${walkRatio.toFixed(3)} source ${sourceRatio.toFixed(3)}`);
+      assert.ok(ratio >= 0.9 && ratio <= 1.0, `squat/sit height ${ratio.toFixed(3)} (sit ${sit.h} squat ${squat.h})`);
+      assert.ok(Math.abs(walkRatio - sourceRatio) <= sourceRatio * 0.05,
+        `walk/sit width ${walkRatio.toFixed(3)} vs source ${sourceRatio.toFixed(3)}`);
       assert.ok(walkRatio <= 1.8, `walk/sit width ${walkRatio.toFixed(3)} (sit ${sit.w} walk ${walk.w})`);
     },
     opts(async ({ base }) => seedScript({

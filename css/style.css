@@ -154,7 +154,7 @@ img { -webkit-user-drag: none; }
 #cat.walking > img { animation: hop .35s ease-in-out infinite; }
 #cat.walking.framed > img { animation: bob .25s ease-in-out infinite; }
 #cat.face-right > img { scale: -1 1; }
-/* crouch art is wide: scale it around the butt so the squat is as tall as the sit pose */
+/* The squat must be as tall as the sit pose. */
 #cat.squatting > img {
   scale: var(--squat-scale, 1);
   transform-origin: var(--squat-origin, 50% 100%);

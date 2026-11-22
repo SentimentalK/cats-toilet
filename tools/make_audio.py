@@ -126,7 +126,7 @@ def encode(wav, mp3):
 
 
 def encode_real(sound, mp3):
-    """Trim + loudnorm one real recording; a missing source is a hard error, never re-synthesised."""
+    """A missing source must fail, never fall back to synthesis."""
     source = SOURCE_DIR / sound['file']
     if not source.is_file():
         print('%s source missing: %s (%s)' % (sound['id'], source, sound['credit']))

@@ -78,8 +78,8 @@
 
   const DEFAULT_CAT = 'domestic-orange';
   const SQUAT_REF_ASPECT = 1.27;
-  // The squat must read at the sitting cat's size; its art is wide, so it is scaled around the butt.
-  const SQUAT_HEIGHT_RATIO = 0.92;
+  // A squat must read at the sitting cat's size.
+  const SQUAT_HEIGHT_RATIO = 0.95;
   const CAT_ART = { sitW: 0, sitH: 0 };
   const POSES = {
     sit: { k: 1 },
@@ -317,7 +317,6 @@
     }
     return { ...POS.cat, z: zOf(POS.cat.y) };
   }
-  // Scale that makes a `layoutW` percent squat container paint at SQUAT_HEIGHT_RATIO of the sit height.
   const squatScaleFor = (layoutW) => (CAT_ART.sitW
     ? POS.cat.w * (CAT_ART.sitH / CAT_ART.sitW) * SQUAT_HEIGHT_RATIO * POSES.squat.aspect / layoutW
     : 1);
@@ -335,9 +334,9 @@
       x += (w - spot.w) / 2;
     }
     if (name === 'squat') {
-      // The layout width is left alone so the butt x stays put; the art is enlarged around it.
-      pose.scale = squatScaleFor(w);
-      el.cat.style.setProperty('--squat-scale', pose.scale.toFixed(4));
+      // The butt x must stay put when the squat is scaled.
+      const scale = squatScaleFor(w);
+      el.cat.style.setProperty('--squat-scale', scale.toFixed(4));
       el.cat.style.setProperty('--squat-origin', (pose.butt.x * 100).toFixed(2) + '% 100%');
     }
     place(el.cat, { x, y: spot.y, w });
@@ -1259,7 +1258,7 @@
   Promise.all(WALK.frames.map((src) => new Promise((ok, fail) => {
     const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = src;
   }))).then(([first]) => sitReady.then((sit) => {
-    // Walk frames use the sit art's source width; their own aspect made the cat far too big.
+    // Walk and sit share one source-pixel scale.
     WALK.w = sit ? POS.cat.w * (first.naturalWidth / sit.naturalWidth) : POS.cat.w;
     WALK.ready = true;
   }), () => { /* no walk frames: keep the hop */ });
