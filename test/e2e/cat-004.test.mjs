@@ -219,6 +219,21 @@ test('CAT-004 需求 3 — 5 种猫叫不连续重复 + 唤醒叫', { timeout: 1
         if (i > 0) assert.notEqual(ids[i], ids[i - 1], `sounds ${i - 1}/${i} repeat`);
       }
       assert.ok(new Set(ids).size >= 3, `saw ${[...new Set(ids)].join(',')}`);
+
+      const decoded = await page.evaluate(`(async () => {
+        const ctx = new AudioContext();
+        const out = {};
+        for (const id of ['purr', 'meow', 'meow-long', 'trill', 'happy']) {
+          const res = await fetch('assets/audio/' + id + '.mp3');
+          out[id] = (await ctx.decodeAudioData(await res.arrayBuffer())).duration;
+        }
+        await ctx.close();
+        return out;
+      })()`);
+      const LEN = { purr: [2.8, 3.2], meow: [0.55, 0.8], 'meow-long': [1.85, 2.1], trill: [0.6, 0.8], happy: [1.05, 1.25] };
+      for (const [id, [lo, hi]] of Object.entries(LEN)) {
+        assert.ok(decoded[id] >= lo && decoded[id] <= hi, `${id} decodes to ${decoded[id]}s`);
+      }
       await page.shot(`${shotDir}/req-03-meows.png`);
     },
     opts(async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ starterBonus: 0, boxes: [{ level: 0, poops: [] }] }), guard: guard('req3') })),
@@ -461,5 +476,60 @@ test('CAT-004 水碗满/半水接入', { timeout: 150_000 }, async (t) => {
       await closeShop(page);
     },
     opts(async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave({ water: 1 }), guard: guard('req7a') })),
+  );
+});
+
+const CAT_IMG_BOX = `(() => {
+  const r = document.querySelector('#cat > img').getBoundingClientRect();
+  const c = document.querySelector('#cat');
+  return { w: r.width, h: r.height, pose: c.dataset.pose };
+})()`;
+
+test('CAT-004 追加 — 坐/走/蹲的猫大小一致', { timeout: 180_000 }, async (t) => {
+  await withGame(
+    t,
+    async ({ page, shotDir }) => {
+      await ready(page);
+      await skipOnboarding(page);
+      await page.waitFor("!!document.querySelector('#cat > img') && document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 8000);
+
+      await page.click(SEL.cat);
+      await page.waitFor("document.querySelector('#cat').dataset.pose === 'sit'", 5000);
+      await sleep(150);
+      const sit = await page.evaluate(CAT_IMG_BOX);
+      assert.equal(sit.pose, 'sit');
+      await page.shot(`${shotDir}/scale-sit.png`);
+
+      const squatting = await page.evaluate(`(() => {
+        const g = window.__game;
+        g.state.sim.fill = 1 - 1200 * g.SIM.rateAt(g.state, g.now());
+        return g.SIM.isSquatting(g.state, g.now());
+      })()`);
+      assert.equal(squatting, true);
+
+      await page.waitFor("document.querySelector('#cat').dataset.pose === 'walk'", 5000);
+      await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
+      const walk = await page.evaluate(CAT_IMG_BOX);
+      assert.equal(walk.pose, 'walk');
+      await page.shot(`${shotDir}/scale-walk.png`);
+
+      await page.waitFor("document.querySelector('#cat').dataset.pose === 'squat'", 8000);
+      await page.waitFor("document.querySelector('#cat > img').complete && document.querySelector('#cat > img').naturalWidth > 0", 3000);
+      await sleep(150);
+      const squat = await page.evaluate(CAT_IMG_BOX);
+      assert.equal(squat.pose, 'squat');
+      await page.shot(`${shotDir}/scale-squat.png`);
+
+      const ratio = squat.h / sit.h;
+      const walkRatio = walk.w / sit.w;
+      t.diagnostic(`sit ${sit.w.toFixed(1)}x${sit.h.toFixed(1)} walk ${walk.w.toFixed(1)}x${walk.h.toFixed(1)} squat ${squat.w.toFixed(1)}x${squat.h.toFixed(1)} h-ratio ${ratio.toFixed(3)} w-ratio ${walkRatio.toFixed(3)}`);
+      assert.ok(ratio >= 0.8 && ratio <= 1.1, `squat/sit height ${ratio.toFixed(3)} (sit ${sit.h} squat ${squat.h})`);
+      assert.ok(walkRatio <= 1.8, `walk/sit width ${walkRatio.toFixed(3)} (sit ${sit.w} walk ${walk.w})`);
+    },
+    opts(async ({ base }) => seedScript({
+      token: (await makeUser(base)).token,
+      save: freshSave({ tutorial: { done: true }, starterBonus: 0, boxes: [{ level: 0, poops: [] }] }),
+      guard: guard('scale'),
+    })),
   );
 });

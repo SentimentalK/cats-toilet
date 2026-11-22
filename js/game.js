@@ -78,7 +78,9 @@
 
   const DEFAULT_CAT = 'domestic-orange';
   const SQUAT_REF_ASPECT = 1.27;
-  const WALK_REF = { w: 27, aspect: 1.46 };
+  // The squat must read at the sitting cat's size; its art is wide, so it is scaled around the butt.
+  const SQUAT_HEIGHT_RATIO = 0.92;
+  const CAT_ART = { sitW: 0, sitH: 0 };
   const POSES = {
     sit: { k: 1 },
     squat: { k: 1, aspect: 1.27, butt: { x: 0.79, y: 0.81 } },
@@ -315,6 +317,11 @@
     }
     return { ...POS.cat, z: zOf(POS.cat.y) };
   }
+  // Scale that makes a `layoutW` percent squat container paint at SQUAT_HEIGHT_RATIO of the sit height.
+  const squatScaleFor = (layoutW) => (CAT_ART.sitW
+    ? POS.cat.w * (CAT_ART.sitH / CAT_ART.sitW) * SQUAT_HEIGHT_RATIO * POSES.squat.aspect / layoutW
+    : 1);
+
   function setPose(name, where = cat.at) {
     if (name !== 'groom') {
       clearTimeout(groomTimer);
@@ -326,6 +333,12 @@
     if (name === 'squat' && spot.fixed) {
       w = spot.w * pose.aspect / SQUAT_REF_ASPECT;
       x += (w - spot.w) / 2;
+    }
+    if (name === 'squat') {
+      // The layout width is left alone so the butt x stays put; the art is enlarged around it.
+      pose.scale = squatScaleFor(w);
+      el.cat.style.setProperty('--squat-scale', pose.scale.toFixed(4));
+      el.cat.style.setProperty('--squat-origin', (pose.butt.x * 100).toFixed(2) + '% 100%');
     }
     place(el.cat, { x, y: spot.y, w });
     cat.pose = name;
@@ -453,7 +466,8 @@
     const ref = c.w * 100;
     const w = ref * pose.aspect / SQUAT_REF_ASPECT;
     const h = w * a.aspect / pose.aspect;
-    return { x: 50 + c.dx * 100 - ref / 2 + pose.butt.x * w, y: 100 - c.lift * 100 - (1 - pose.butt.y) * h };
+    const scale = squatScaleFor(w);
+    return { x: 50 + c.dx * 100 - ref / 2 + pose.butt.x * w, y: 100 - c.lift * 100 - (1 - pose.butt.y) * h * scale };
   }
   function renderBoxPoops(rec, i) {
     const box = state.boxes[i], a = boxArt(i), cap = LEVELS[box.level].cap;
@@ -1230,12 +1244,25 @@
   const preload = [...Object.keys(POSES).map(poseSrc), ...BOX_ART.map((a) => a.src), ...POOP_SRC,
     ...ITEMS.flatMap((it) => [it.src, it.full].filter(Boolean)), 'assets/bowl-empty.png'];
   for (const src of preload) new Image().src = src;
+  const sitProbe = new Image();
+  const sitReady = new Promise((ok) => {
+    sitProbe.onload = () => ok(sitProbe);
+    sitProbe.onerror = () => ok(null);
+    sitProbe.src = poseSrc('sit');
+  });
+  sitReady.then((im) => {
+    if (!im) return;
+    CAT_ART.sitW = im.naturalWidth;
+    CAT_ART.sitH = im.naturalHeight;
+    if (cat.pose === 'squat') setPose('squat');
+  });
   Promise.all(WALK.frames.map((src) => new Promise((ok, fail) => {
     const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = src;
-  }))).then(([first]) => {
-    WALK.w = WALK_REF.w * (first.naturalWidth / first.naturalHeight) / WALK_REF.aspect;
+  }))).then(([first]) => sitReady.then((sit) => {
+    // Walk frames use the sit art's source width; their own aspect made the cat far too big.
+    WALK.w = sit ? POS.cat.w * (first.naturalWidth / sit.naturalWidth) : POS.cat.w;
     WALK.ready = true;
-  }, () => { /* no walk frames: keep the hop */ });
+  }), () => { /* no walk frames: keep the hop */ });
   const squatProbe = new Image();
   squatProbe.onload = () => {
     const aspect = squatProbe.naturalWidth / squatProbe.naturalHeight;
