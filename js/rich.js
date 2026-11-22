@@ -101,7 +101,9 @@
   }
 
   function toText(text) {
-    return toLines(text).map(function (line) { return line.text; }).join('');
+    return String(text).split('\n').map(function (line) {
+      return splitSentences(line).join('');
+    }).join('\n');
   }
 
   return {

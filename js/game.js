@@ -42,7 +42,7 @@
   const audio = AUDIO.createEngine({
     AudioContext: window.AudioContext || window.webkitAudioContext,
     fetch: window.fetch.bind(window),
-    baseUrl: location.href.replace(/[^/]*$/, ''),
+    baseUrl: new URL('assets/audio/', document.baseURI).href,
   });
   audio.setSettings(AUDIO_SETTINGS);
   const unlockAudio = () => { audio.unlock(); };
@@ -574,10 +574,10 @@
     if (!poop) return;
     const node = boxEls[boxIndex] ? boxEls[boxIndex].poops.querySelector(`[data-id="${id}"]`) : null;
     const from = node ? sceneXY(node.getBoundingClientRect()) : null;
-    const bonus = state.starterBonus > 0;
+    const bonus = Math.floor(state.starterBonus || 0);
     const gain = SIM.scoop(state, boxIndex, id);
     if (!gain) return;
-    if (bonus) toast(`新手礼 +${SIM.STARTER_BONUS} 积分喵！`);
+    if (bonus > 0) toast(`新手礼 +${bonus} 积分喵！`);
     save(); renderBoxes(); renderPanel(); renderTick(now());
     flyToBag(from, poop.kind, 0);
     if (from) {
@@ -597,10 +597,10 @@
       });
     });
     if (!flights.length) { say('盆里干干净净喵～'); return; }
-    const bonus = state.starterBonus > 0;
+    const bonus = Math.floor(state.starterBonus || 0);
     const total = SIM.scoopAll(state);
     if (!total) { renderBoxes(); return; }
-    if (bonus) toast(`新手礼 +${SIM.STARTER_BONUS} 积分喵！`);
+    if (bonus > 0) toast(`新手礼 +${bonus} 积分喵！`);
     keepInView(POS.box.x);
     save(); renderBoxes(); renderPanel(); renderTick(now());
     flights.forEach((f, k) => flyToBag(f.from, f.kind, k * 130));
@@ -894,9 +894,9 @@
       <p class="sheet-note" style="margin-bottom:12px">${RICH.toHtml('猫会自己上厕所，你负责铲屎、加水、买饭和摸头。登录后进度存在云端；游客模式只存在这台设备的浏览器里。')}</p>
       <div class="set-rows">
         <div class="set-row"><label for="set-music">音乐</label><input type="checkbox" id="set-music"${a.musicOn ? ' checked' : ''}></div>
-        <div class="set-row"><label for="set-music-vol">音量</label><input type="range" id="set-music-vol" min="0" max="100" step="1" value="${pct(a.musicVol)}"><output id="set-music-val">${pct(a.musicVol)}%</output></div>
+        <div class="set-row"><label for="set-music-vol">音乐音量</label><input type="range" id="set-music-vol" min="0" max="100" step="1" value="${pct(a.musicVol)}"><output id="set-music-val">${pct(a.musicVol)}%</output></div>
         <div class="set-row"><label for="set-sfx">音效</label><input type="checkbox" id="set-sfx"${a.sfxOn ? ' checked' : ''}></div>
-        <div class="set-row"><label for="set-sfx-vol">音量</label><input type="range" id="set-sfx-vol" min="0" max="100" step="1" value="${pct(a.sfxVol)}"><output id="set-sfx-val">${pct(a.sfxVol)}%</output></div>
+        <div class="set-row"><label for="set-sfx-vol">音效音量</label><input type="range" id="set-sfx-vol" min="0" max="100" step="1" value="${pct(a.sfxVol)}"><output id="set-sfx-val">${pct(a.sfxVol)}%</output></div>
       </div>
       <button class="big-btn plain" data-act="reset">重置存档</button>`, 'settings');
   }
@@ -1065,12 +1065,19 @@
   let onbHelp = false;
   let hintShown = false;
   function hintStarterScoop() {
-    if (state.starterBonus > 0 && state.totalScooped === 0 && !hintShown) {
-      hintShown = true;
-      setTimeout(() => {
-        if (!busy) say(`盆里有 3 坨便便，可以铲了喵！\n铲屎换积分，第一次铲还有 ${SIM.STARTER_BONUS} 新手礼。`, HINT_MS);
-      }, 500);
-    }
+    if (state.starterBonus <= 0 || state.totalScooped > 0 || hintShown) return;
+    let tries = 0;
+    const attempt = () => {
+      if (hintShown) return;
+      if (state.starterBonus <= 0 || state.totalScooped > 0) { hintShown = true; return; }
+      if (!busy) {
+        hintShown = true;
+        say(`盆里有 ${SIM.START_POOP_COUNT} 坨便便，可以铲了喵！\n铲屎换积分，第一次铲还有 ${SIM.STARTER_BONUS} 新手礼。`, HINT_MS);
+        return;
+      }
+      if (++tries < 20) setTimeout(attempt, 300);
+    };
+    setTimeout(attempt, 500);
   }
   function renderOnboarding() {
     const step = ONBOARDING[onbStep];

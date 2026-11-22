@@ -93,13 +93,30 @@ test('CAT-004 需求 1 — BGM 与设置持久化', { timeout: 150_000 }, async 
       await sleep(300);
       assert.equal(await page.evaluate('window.__audio.status().sfxCount'), muted);
 
+      await page.addInitScript(seedScript({ token: (await makeUser(base)).token, save: freshSave(), guard: guard('req1b') }));
+      await reloadRoom(page, base + ROOM + '#room');
+      await ready(page);
+      await page.click('#points');
+      await page.waitFor(UNLOCKED, 15_000);
+      await page.click('#btn-settings');
+      await waitVisible(page, '#set-sfx');
+      assert.equal(await page.evaluate("document.querySelector('#set-sfx').checked"), false);
+      assert.equal(await page.evaluate("document.querySelector('#set-music').checked"), true);
+      assert.equal(await page.evaluate("document.querySelector('#set-music-vol').value"), '20');
+      await page.click('#sheet-close');
+      await waitHidden(page, SEL.sheet);
+      const afterReload = await page.evaluate('window.__audio.status().sfxCount');
+      await page.click(SEL.cat);
+      await sleep(300);
+      assert.equal(await page.evaluate('window.__audio.status().sfxCount'), afterReload);
+
       await page.click('#btn-settings');
       await waitVisible(page, '#set-sfx');
       await page.click('#set-sfx');
       await page.click('#sheet-close');
       await waitHidden(page, SEL.sheet);
       await page.click(SEL.cat);
-      await page.waitFor(`window.__audio.status().sfxCount === ${muted + 1}`, 3000);
+      await page.waitFor(`window.__audio.status().sfxCount === ${afterReload + 1}`, 3000);
       assert.equal(await page.evaluate('window.__audio.status().settings.sfxOn'), true);
     },
     opts(async ({ base }) => seedScript({ token: (await makeUser(base)).token, save: freshSave(), guard: guard('req1') })),

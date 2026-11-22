@@ -24,6 +24,8 @@ const SHELL = [
   'css/social.css',
   'js/cats.js',
   'js/sim.js',
+  'js/rich.js',
+  'js/audio.js',
   'js/game.js',
   'js/api.js',
   'js/account.js',

@@ -24,7 +24,7 @@
 | trill | 颤音 | 0.7 s | 520 Hz 载波，18 Hz 颤音调幅 |
 | happy | 开心喵 | 0.8 s | 600→760 Hz、700→900 Hz 两段上扬 |
 
-`SOUND_IDS = ['purr','meow','meow-long','trill','happy']`，`BGM_ID = 'bgm'`，`SOUND_LABELS` 提供界面用中文名。
+`SOUND_IDS = ['purr','meow','meow-long','trill','happy']`（打呼噜、短喵、长喵、颤音、开心喵），`BGM_ID = 'bgm'`。
 
 ## 设置
 

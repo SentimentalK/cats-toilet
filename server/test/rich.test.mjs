@@ -59,8 +59,7 @@ test('片段拼回原文', () => {
   const source = '铲屎 积分\n水盆！猫粮；心情, 商店 买';
   const lines = RICH.toLines(source);
   for (const line of lines) assert.equal(join(line), line.text);
-  assert.equal(lines.map((line) => line.text).join(''), source.split('\n').join(''));
-  assert.equal(RICH.toText(source), source.split('\n').join(''));
+  assert.equal(RICH.toText(source), source);
 });
 
 test('空片段与纯空白行被丢弃', () => {

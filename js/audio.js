@@ -5,7 +5,6 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   var SETTINGS_KEY = 'cats-toilet-audio-v1';
   var SOUND_IDS = ['purr', 'meow', 'meow-long', 'trill', 'happy'];
-  var SOUND_LABELS = { purr: '打呼噜', meow: '短喵', 'meow-long': '长喵', trill: '颤音', happy: '开心喵' };
   var BGM_ID = 'bgm';
   var DEFAULT_SETTINGS = { musicOn: true, sfxOn: true, musicVol: 0.4, sfxVol: 0.7 };
   var FILE_IDS = SOUND_IDS.concat([BGM_ID]);
@@ -109,7 +108,7 @@
     }
 
     function loadOne(id) {
-      var url = baseUrl + 'assets/audio/' + id + '.mp3';
+      var url = baseUrl + id + '.mp3';
       return Promise.resolve()
         .then(function () {
           if (typeof fetchFn !== 'function') throw new Error('fetch missing');
@@ -134,7 +133,7 @@
     }
 
     function startBgm() {
-      if (!ctx || !musicGain || !buffers[BGM_ID] || !settings.musicOn || bgmPlaying) return;
+      if (!ctx || !musicGain || !buffers[BGM_ID] || !settings.musicOn || bgmSource) return;
       try {
         var src = ctx.createBufferSource();
         src.buffer = buffers[BGM_ID];
@@ -153,25 +152,20 @@
     }
 
     function stopBgm() {
-      if (!bgmSource || !ctx || !musicGain) {
-        bgmSource = null;
-        bgmPlaying = false;
-        return;
-      }
+      var src = bgmSource;
+      bgmSource = null;
+      bgmPlaying = false;
+      if (!src || !ctx || !musicGain) return;
       try {
-        var src = bgmSource;
         var now = ctx.currentTime;
         musicGain.gain.cancelScheduledValues(now);
         musicGain.gain.setValueAtTime(settings.musicVol, now);
         musicGain.gain.linearRampToValueAtTime(0, now + 0.3);
-        bgmSource = null;
         setTimeout(function () {
           try { src.stop(); } catch (_) { /* already stopped */ }
-          bgmPlaying = false;
         }, 320);
       } catch (_) {
-        bgmSource = null;
-        bgmPlaying = false;
+        try { src.stop(); } catch (_) { /* already stopped */ }
       }
     }
 
@@ -275,7 +269,6 @@
   return {
     SETTINGS_KEY: SETTINGS_KEY,
     SOUND_IDS: SOUND_IDS,
-    SOUND_LABELS: SOUND_LABELS,
     BGM_ID: BGM_ID,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     normalizeSettings: normalizeSettings,

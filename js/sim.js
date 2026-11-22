@@ -109,7 +109,7 @@
       owned: {},
       walls: { sky: true },
       wall: 'sky',
-      boxes: [{ level: 0, poops: [{ id: 1, kind: 0 }, { id: 2, kind: 1 }, { id: 3, kind: 1 }] }],
+      boxes: [{ level: 0, poops: Array.from({ length: START_POOP_COUNT }, function (_, i) { return { id: i + 1, kind: i ? 1 : 0 }; }) }],
       water: 1,
       food: 1,
       mood: { petAt: 0, playAt: 0, treatAt: 0, treatBoost: 0 },

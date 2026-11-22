@@ -83,3 +83,58 @@ test('连续一千次猫叫相邻不同且五种都出现', () => {
   }
   assert.deepEqual([...seen].sort(), [...AUDIO.SOUND_IDS].sort());
 });
+
+function fakeAudioContext(state = 'running') {
+  const started = [];
+  const gains = [];
+  const ctx = {
+    state,
+    currentTime: 0,
+    destination: {},
+    resume() { return Promise.resolve(); },
+    createGain() {
+      const gain = {
+        value: 0,
+        cancelScheduledValues() {},
+        setValueAtTime(v) { this.value = v; },
+        linearRampToValueAtTime(v) { this.value = v; },
+      };
+      gains.push(gain);
+      return { gain, connect() {} };
+    },
+    createBufferSource() {
+      const src = {
+        buffer: null,
+        loop: false,
+        connect() {},
+        start() { started.push(src); },
+        stop() {},
+      };
+      return src;
+    },
+    decodeAudioData(bytes, ok) { ok({ id: 'buffer' }); },
+  };
+  return { ctx, started, gains };
+}
+
+test('BGM 在 fade 窗口内关再开仍会重新播放', async () => {
+  const fake = fakeAudioContext();
+  const fetchFn = () => Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) });
+  const engine = AUDIO.createEngine({
+    AudioContext: function () { return fake.ctx; },
+    fetch: fetchFn,
+    baseUrl: './assets/audio/',
+  });
+  await engine.unlock();
+  assert.equal(engine.status().bgmPlaying, true);
+  assert.equal(fake.started.length, 1);
+
+  engine.setSettings({ musicOn: false });
+  assert.equal(engine.status().bgmPlaying, false);
+  engine.setSettings({ musicOn: true });
+  assert.equal(engine.status().bgmPlaying, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(engine.status().bgmPlaying, true);
+  assert.equal(fake.started.length, 2);
+});
